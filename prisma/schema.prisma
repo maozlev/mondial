@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth (NextAuth Prisma Adapter) ───────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Application Models ───────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+
+  accounts     Account[]
+  sessions     Session[]
+  predictions  Prediction[]
+}
+
+enum MatchStage {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  THIRD
+  FINAL
+}
+
+enum MatchStatus {
+  UPCOMING
+  LOCKED
+  FINISHED
+}
+
+model Match {
+  id          String      @id @default(cuid())
+  homeTeam    String
+  awayTeam    String
+  stage       MatchStage
+  groupName   String?     // e.g. "A", "B" — only for GROUP stage
+  scheduledAt DateTime
+  homeScore   Int?
+  awayScore   Int?
+  status      MatchStatus @default(UPCOMING)
+  externalId  String?     @unique // football-data.org match id
+  createdAt   DateTime    @default(now())
+
+  predictions      Prediction[]
+  predictionScores PredictionScore[]
+}
+
+model Prediction {
+  id             String   @id @default(cuid())
+  userId         String
+  matchId        String
+  version        Int      // 1, 2, or 3
+  homeScore      Int
+  awayScore      Int
+  additionalData Json?    // future: firstScorer, etc.
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  scores PredictionScore[]
+
+  @@unique([userId, matchId, version])
+}
+
+model ScoringRule {
+  id        String   @id @default(cuid())
+  eventType String   // e.g. "winner_correct", "exact_score", "first_scorer"
+  name      String   // English display name
+  nameHe    String   // Hebrew display name
+  points    Int
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  predictionScores PredictionScore[]
+}
+
+model PredictionScore {
+  id            String   @id @default(cuid())
+  predictionId  String
+  matchId       String
+  ruleId        String
+  points        Int
+  calculatedAt  DateTime @default(now())
+
+  prediction Prediction  @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  match      Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  rule       ScoringRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([predictionId, ruleId])
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "leaderboard": "Leaderboard",
+    "predictions": "My Predictions",
+    "admin": "Admin",
+    "signIn": "Sign in with Google",
+    "signOut": "Sign out"
+  },
+  "leaderboard": {
+    "title": "Leaderboard — World Cup 2026",
+    "rank": "Rank",
+    "player": "Player",
+    "points": "Points",
+    "version": "Version"
+  },
+  "predictions": {
+    "title": "My Predictions",
+    "version": "Version",
+    "save": "Save",
+    "saved": "Saved",
+    "locked": "Locked",
+    "homeScore": "Home",
+    "awayScore": "Away",
+    "stages": {
+      "GROUP": "Group Stage",
+      "R32": "Round of 32",
+      "R16": "Round of 16",
+      "QF": "Quarter-final",
+      "SF": "Semi-final",
+      "THIRD": "Third place",
+      "FINAL": "Final"
+    }
+  },
+  "admin": {
+    "matches": "Matches",
+    "results": "Results",
+    "scoring": "Scoring Rules",
+    "settings": "Settings",
+    "addMatch": "Add Match",
+    "importMatches": "Import from API",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "recalculate": "Recalculate",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "home": "Home"
+  }
+}

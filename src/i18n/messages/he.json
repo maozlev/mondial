@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "leaderboard": "לוח מובילים",
+    "predictions": "ניחושים שלי",
+    "admin": "ניהול",
+    "signIn": "התחברות עם Google",
+    "signOut": "התנתקות"
+  },
+  "leaderboard": {
+    "title": "לוח מובילים — מונדיאל 2026",
+    "rank": "מקום",
+    "player": "שחקן",
+    "points": "נקודות",
+    "version": "גרסה"
+  },
+  "predictions": {
+    "title": "הניחושים שלי",
+    "version": "גרסה",
+    "save": "שמור",
+    "saved": "נשמר",
+    "locked": "נעול",
+    "homeScore": "בית",
+    "awayScore": "אורח",
+    "stages": {
+      "GROUP": "שלב הבתים",
+      "R32": "סיבוב 32",
+      "R16": "שמינית גמר",
+      "QF": "רבע גמר",
+      "SF": "חצי גמר",
+      "THIRD": "משחק גומלין",
+      "FINAL": "גמר"
+    }
+  },
+  "admin": {
+    "matches": "משחקים",
+    "results": "תוצאות",
+    "scoring": "חוקי ניקוד",
+    "settings": "הגדרות",
+    "addMatch": "הוסף משחק",
+    "importMatches": "ייבא מ-API",
+    "lock": "נעל",
+    "unlock": "שחרר",
+    "recalculate": "חשב מחדש",
+    "save": "שמור",
+    "cancel": "בטל",
+    "delete": "מחק",
+    "active": "פעיל",
+    "inactive": "לא פעיל"
+  },
+  "common": {
+    "loading": "טוען...",
+    "error": "שגיאה",
+    "success": "הצלחה",
+    "confirm": "אישור",
+    "home": "בית"
+  }
+}

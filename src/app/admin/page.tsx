@@ -18,7 +18,7 @@ export default async function AdminPage() {
     prisma.appSetting.findMany(),
   ]);
 
-  const settingsMap = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const settingsMap = Object.fromEntries(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
 
   // Match status breakdown
   const [upcoming, locked, finished] = await Promise.all([

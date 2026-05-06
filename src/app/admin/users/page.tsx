@@ -25,7 +25,12 @@ export default async function AdminUsersPage() {
     },
   });
 
-  const stats = users
+  type UserStat = typeof users[number] & {
+    vs: Record<number, { count: number; points: number }>;
+    bestPoints: number;
+  };
+
+  const stats: UserStat[] = users
     .map((u: typeof users[number]) => {
       const vs: Record<number, { count: number; points: number }> = {
         1: { count: 0, points: 0 },
@@ -40,7 +45,7 @@ export default async function AdminUsersPage() {
       const bestPoints = Math.max(vs[1].points, vs[2].points, vs[3].points);
       return { ...u, vs, bestPoints };
     })
-    .sort((a: { bestPoints: number }, b: { bestPoints: number }) => b.bestPoints - a.bestPoints);
+    .sort((a: UserStat, b: UserStat) => b.bestPoints - a.bestPoints);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

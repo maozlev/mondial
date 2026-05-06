@@ -13,6 +13,16 @@ import { getFlagUrl } from "@/lib/flags";
 //   QF4 (M100): 1st from B,J,K |  2nd from D,G,H  (+3rd wildcards)
 // SF1 = winner(QF1) vs winner(QF2)  →  left finalist
 // SF2 = winner(QF3) vs winner(QF4)  →  right finalist
+//
+// R16 matches feed QF slots directly:
+//   R16 m0 (rank1 E,F,I)  → picks.qf[0] = QF1 teamA
+//   R16 m1 (rank2 A,B,C)  → picks.qf[1] = QF1 teamB
+//   R16 m2 (rank1 D,G,H)  → picks.qf[2] = QF2 teamA
+//   R16 m3 (rank2 J,K,L)  → picks.qf[3] = QF2 teamB
+//   R16 m4 (rank1 A,C,L)  → picks.qf[4] = QF3 teamA
+//   R16 m5 (rank2 E,F,I)  → picks.qf[5] = QF3 teamB
+//   R16 m6 (rank1 B,J,K)  → picks.qf[6] = QF4 teamA
+//   R16 m7 (rank2 D,G,H)  → picks.qf[7] = QF4 teamB
 
 const QF_INFO = [
   { id: 1, label: "רבע גמר 1", rank1Groups: ["E","F","I"], rank2Groups: ["A","B","C"] },
@@ -27,14 +37,21 @@ type StandingPred = {
 type KnockoutRow = { stage: string; slot: number; teamName: string };
 
 type Picks = {
-  qf: string[];     // 8 slots: pairs [qf1a, qf1b, qf2a, qf2b, qf3a, qf3b, qf4a, qf4b]
-  sf: string[];     // 4 slots: QF winners
-  final: string[];  // 2 slots: SF winners
+  r16: string[];    // 16 slots: pairs [m0a, m0b, m1a, m1b, ..., m7a, m7b]
+  qf: string[];     // 8 slots: R16 winners (QF participants)
+  sf: string[];     // 4 slots: QF winners (SF participants)
+  final: string[];  // 2 slots: SF winners (Final participants)
   winner: string;
 };
 
 function emptyPicks(): Picks {
-  return { qf: Array(8).fill(""), sf: Array(4).fill(""), final: Array(2).fill(""), winner: "" };
+  return {
+    r16: Array(16).fill(""),
+    qf: Array(8).fill(""),
+    sf: Array(4).fill(""),
+    final: Array(2).fill(""),
+    winner: "",
+  };
 }
 
 function addThirds(teams: string[], allThirds: string[]): string[] {
@@ -42,22 +59,31 @@ function addThirds(teams: string[], allThirds: string[]): string[] {
   return teams.filter(Boolean);
 }
 
-function getCandidatesA(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
-  const info = QF_INFO[qfIdx];
+/** Candidates for R16 match r16Idx: rank1/rank2 of specific groups + thirds wildcards */
+function getCandidatesForR16(r16Idx: number, standings: StandingPred[], allThirds: string[]): string[] {
+  const qfMatchIdx = Math.floor(r16Idx / 2);
+  const side = r16Idx % 2; // 0 = rank1Groups, 1 = rank2Groups
+  const info = QF_INFO[qfMatchIdx];
+  const groups = (side === 0 ? info.rank1Groups : info.rank2Groups) as readonly string[];
   const teams: string[] = [];
   for (const s of standings) {
-    if ((info.rank1Groups as readonly string[]).includes(s.groupName) && s.rank1) teams.push(s.rank1);
+    if (groups.includes(s.groupName)) {
+      const team = side === 0 ? s.rank1 : s.rank2;
+      if (team) teams.push(team);
+    }
   }
   return addThirds(teams, allThirds);
 }
 
-function getCandidatesB(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
-  const info = QF_INFO[qfIdx];
-  const teams: string[] = [];
-  for (const s of standings) {
-    if ((info.rank2Groups as readonly string[]).includes(s.groupName) && s.rank2) teams.push(s.rank2);
-  }
-  return addThirds(teams, allThirds);
+function getR16Label(r16Idx: number): string {
+  return `שמינית גמר ${r16Idx + 1}`;
+}
+
+function getR16Groups(r16Idx: number): string[] {
+  const qfMatchIdx = Math.floor(r16Idx / 2);
+  const side = r16Idx % 2;
+  const info = QF_INFO[qfMatchIdx];
+  return [...(side === 0 ? info.rank1Groups : info.rank2Groups)];
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -161,7 +187,8 @@ export default function BracketPage() {
         if (!Array.isArray(data) || data.length === 0) return;
         const next = emptyPicks();
         for (const row of data) {
-          if (row.stage === "QF" && row.slot >= 1 && row.slot <= 8) next.qf[row.slot - 1] = row.teamName;
+          if (row.stage === "R16" && row.slot >= 1 && row.slot <= 16) next.r16[row.slot - 1] = row.teamName;
+          else if (row.stage === "QF" && row.slot >= 1 && row.slot <= 8) next.qf[row.slot - 1] = row.teamName;
           else if (row.stage === "SF" && row.slot >= 1 && row.slot <= 4) next.sf[row.slot - 1] = row.teamName;
           else if (row.stage === "FINAL" && row.slot >= 1 && row.slot <= 2) next.final[row.slot - 1] = row.teamName;
           else if (row.stage === "WINNER" && row.slot === 1) next.winner = row.teamName;
@@ -171,33 +198,54 @@ export default function BracketPage() {
   }, [versionNum]);
 
   const allThirds = standings.map((s) => s.rank3).filter(Boolean);
-  const qfCandsA = (idx: number) => getCandidatesA(idx, standings, allThirds);
-  const qfCandsB = (idx: number) => getCandidatesB(idx, standings, allThirds);
+  const r16Cands = (r16Idx: number) => getCandidatesForR16(r16Idx, standings, allThirds);
 
-  function setQFTeam(matchIdx: number, side: 0 | 1, team: string) {
+  function setR16Team(r16MatchIdx: number, side: 0 | 1, team: string) {
     setPicks((prev) => {
-      const next = { ...prev, qf: [...prev.qf] };
-      const oldTeam = prev.qf[matchIdx * 2 + side];
-      next.qf[matchIdx * 2 + side] = team;
-      // Clear SF/Final/Winner if old team was advanced
-      if (prev.sf[matchIdx] === oldTeam) {
-        next.sf = [...prev.sf]; next.sf[matchIdx] = "";
-        const fIdx = matchIdx <= 1 ? 0 : 1;
-        if (prev.final[fIdx] === oldTeam) {
-          next.final = [...prev.final]; next.final[fIdx] = "";
-          if (prev.winner === oldTeam) next.winner = "";
+      const next = { ...prev, r16: [...prev.r16] };
+      const oldTeam = prev.r16[r16MatchIdx * 2 + side];
+      next.r16[r16MatchIdx * 2 + side] = team;
+      // If old team was the R16 winner, clear QF slot and downstream
+      if (prev.qf[r16MatchIdx] === oldTeam) {
+        next.qf = [...prev.qf]; next.qf[r16MatchIdx] = "";
+        const qfMatchIdx = Math.floor(r16MatchIdx / 2);
+        if (prev.sf[qfMatchIdx] === oldTeam) {
+          next.sf = [...prev.sf]; next.sf[qfMatchIdx] = "";
+          const fIdx = qfMatchIdx <= 1 ? 0 : 1;
+          if (prev.final[fIdx] === oldTeam) {
+            next.final = [...prev.final]; next.final[fIdx] = "";
+            if (prev.winner === oldTeam) next.winner = "";
+          }
         }
       }
       return next;
     });
   }
 
-  function pickQFWinner(matchIdx: number, team: string) {
+  function pickR16Winner(r16MatchIdx: number, team: string) {
+    setPicks((prev) => {
+      const next = { ...prev, qf: [...prev.qf] };
+      const old = prev.qf[r16MatchIdx];
+      next.qf[r16MatchIdx] = team;
+      const qfMatchIdx = Math.floor(r16MatchIdx / 2);
+      if (old && prev.sf[qfMatchIdx] === old) {
+        next.sf = [...prev.sf]; next.sf[qfMatchIdx] = "";
+        const fIdx = qfMatchIdx <= 1 ? 0 : 1;
+        if (prev.final[fIdx] === old) {
+          next.final = [...prev.final]; next.final[fIdx] = "";
+          if (prev.winner === old) next.winner = "";
+        }
+      }
+      return next;
+    });
+  }
+
+  function pickQFWinner(qfMatchIdx: number, team: string) {
     setPicks((prev) => {
       const next = { ...prev, sf: [...prev.sf] };
-      const old = prev.sf[matchIdx];
-      next.sf[matchIdx] = team;
-      const fIdx = matchIdx <= 1 ? 0 : 1;
+      const old = prev.sf[qfMatchIdx];
+      next.sf[qfMatchIdx] = team;
+      const fIdx = qfMatchIdx <= 1 ? 0 : 1;
       if (old && prev.final[fIdx] === old) {
         next.final = [...prev.final]; next.final[fIdx] = "";
         if (prev.winner === old) next.winner = "";
@@ -219,6 +267,7 @@ export default function BracketPage() {
   const handleSave = async () => {
     setSaving(true); setMessage("");
     const payload: KnockoutRow[] = [];
+    picks.r16.forEach((t, i) => { if (t) payload.push({ stage: "R16", slot: i + 1, teamName: t }); });
     picks.qf.forEach((t, i) => { if (t) payload.push({ stage: "QF", slot: i + 1, teamName: t }); });
     picks.sf.forEach((t, i) => { if (t) payload.push({ stage: "SF", slot: i + 1, teamName: t }); });
     picks.final.forEach((t, i) => { if (t) payload.push({ stage: "FINAL", slot: i + 1, teamName: t }); });
@@ -239,7 +288,7 @@ export default function BracketPage() {
     : null;
 
   return (
-    <div className="max-w-6xl mx-auto px-3 py-6" dir="rtl">
+    <div className="max-w-7xl mx-auto px-3 py-6" dir="rtl">
       {/* Sub-nav */}
       <div className="flex gap-1 mb-6 border-b border-gray-800 pb-0 overflow-x-auto">
         <Link href={`/predictions/${versionNum}`} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent">
@@ -282,6 +331,28 @@ export default function BracketPage() {
       {/* ─── Mobile stacked layout ───────────────────────────────────────── */}
       <div className="md:hidden space-y-6 pb-4">
 
+        {/* R16 matches */}
+        <div>
+          <ColHeader>שמינית גמר</ColHeader>
+          <div className="mt-2 space-y-3">
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((r16Idx) => (
+              <R16Card
+                key={r16Idx}
+                label={getR16Label(r16Idx)}
+                groups={getR16Groups(r16Idx)}
+                teamA={picks.r16[r16Idx * 2]}
+                teamB={picks.r16[r16Idx * 2 + 1]}
+                candidates={r16Cands(r16Idx)}
+                qfTeam={picks.qf[r16Idx]}
+                locked={locked}
+                onChangeA={(t) => setR16Team(r16Idx, 0, t)}
+                onChangeB={(t) => setR16Team(r16Idx, 1, t)}
+                onPickWinner={(t) => pickR16Winner(r16Idx, t)}
+              />
+            ))}
+          </div>
+        </div>
+
         {/* QF matches */}
         <div>
           <ColHeader>רבע גמר</ColHeader>
@@ -289,13 +360,11 @@ export default function BracketPage() {
             {[0, 1, 2, 3].map((qfIdx) => (
               <QFCard
                 key={qfIdx}
-                label={QF_INFO[qfIdx].label}
-                groups={[...QF_INFO[qfIdx].rank1Groups, ...QF_INFO[qfIdx].rank2Groups]}
-                teamA={picks.qf[qfIdx * 2]} teamB={picks.qf[qfIdx * 2 + 1]}
-                candidatesA={qfCandsA(qfIdx)} candidatesB={qfCandsB(qfIdx)}
-                sfWinner={picks.sf[qfIdx]} locked={locked}
-                onChangeA={(t) => setQFTeam(qfIdx, 0, t)}
-                onChangeB={(t) => setQFTeam(qfIdx, 1, t)}
+                label={`רבע גמר ${qfIdx + 1}`}
+                teamA={picks.qf[qfIdx * 2]}
+                teamB={picks.qf[qfIdx * 2 + 1]}
+                sfTeam={picks.sf[qfIdx]}
+                locked={locked}
                 onPickWinner={(t) => pickQFWinner(qfIdx, t)}
               />
             ))}
@@ -328,28 +397,46 @@ export default function BracketPage() {
         </div>
       </div>
 
-      {/* ─── Desktop 4-2-1-2-4 Bracket ──────────────────────────────────────── */}
+      {/* ─── Desktop Bracket ─────────────────────────────────────────────────── */}
       <div className="hidden md:block overflow-x-auto -mx-3 px-3 pb-4">
-        <div className="flex gap-2 min-w-[760px] items-stretch" dir="ltr">
+        <div className="flex gap-2 min-w-[1120px] items-stretch" dir="ltr">
 
-          {/* Left QF column */}
-          <div className="flex flex-col gap-3 flex-1 min-w-[170px]">
+          {/* R16 Left column (matches 0–3, feeding QF1 and QF2) */}
+          <div className="flex flex-col gap-2 flex-1 min-w-[150px]">
+            <ColHeader>שמינית גמר</ColHeader>
+            {[0, 1, 2, 3].map((r16Idx) => (
+              <React.Fragment key={r16Idx}>
+                <R16Card
+                  label={getR16Label(r16Idx)}
+                  groups={getR16Groups(r16Idx)}
+                  teamA={picks.r16[r16Idx * 2]}
+                  teamB={picks.r16[r16Idx * 2 + 1]}
+                  candidates={r16Cands(r16Idx)}
+                  qfTeam={picks.qf[r16Idx]}
+                  locked={locked}
+                  onChangeA={(t) => setR16Team(r16Idx, 0, t)}
+                  onChangeB={(t) => setR16Team(r16Idx, 1, t)}
+                  onPickWinner={(t) => pickR16Winner(r16Idx, t)}
+                />
+                {r16Idx === 1 && <div className="flex-1 min-h-2" />}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* QF Left column (QF1 and QF2) */}
+          <div className="flex flex-col gap-3 flex-1 min-w-[150px]">
             <ColHeader>רבע גמר</ColHeader>
             <QFCard
-              label={QF_INFO[0].label}
-              groups={[...QF_INFO[0].rank1Groups, ...QF_INFO[0].rank2Groups]}
+              label="רבע גמר 1"
               teamA={picks.qf[0]} teamB={picks.qf[1]}
-              candidatesA={qfCandsA(0)} candidatesB={qfCandsB(0)} sfWinner={picks.sf[0]} locked={locked}
-              onChangeA={(t) => setQFTeam(0, 0, t)} onChangeB={(t) => setQFTeam(0, 1, t)}
+              sfTeam={picks.sf[0]} locked={locked}
               onPickWinner={(t) => pickQFWinner(0, t)}
             />
             <div className="flex-1 min-h-4" />
             <QFCard
-              label={QF_INFO[1].label}
-              groups={[...QF_INFO[1].rank1Groups, ...QF_INFO[1].rank2Groups]}
+              label="רבע גמר 2"
               teamA={picks.qf[2]} teamB={picks.qf[3]}
-              candidatesA={qfCandsA(1)} candidatesB={qfCandsB(1)} sfWinner={picks.sf[1]} locked={locked}
-              onChangeA={(t) => setQFTeam(1, 0, t)} onChangeB={(t) => setQFTeam(1, 1, t)}
+              sfTeam={picks.sf[1]} locked={locked}
               onPickWinner={(t) => pickQFWinner(1, t)}
             />
           </div>
@@ -389,26 +476,44 @@ export default function BracketPage() {
             />
           </div>
 
-          {/* Right QF column */}
-          <div className="flex flex-col gap-3 flex-1 min-w-[170px]">
+          {/* QF Right column (QF3 and QF4) */}
+          <div className="flex flex-col gap-3 flex-1 min-w-[150px]">
             <ColHeader>רבע גמר</ColHeader>
             <QFCard
-              label={QF_INFO[2].label}
-              groups={[...QF_INFO[2].rank1Groups, ...QF_INFO[2].rank2Groups]}
+              label="רבע גמר 3"
               teamA={picks.qf[4]} teamB={picks.qf[5]}
-              candidatesA={qfCandsA(2)} candidatesB={qfCandsB(2)} sfWinner={picks.sf[2]} locked={locked}
-              onChangeA={(t) => setQFTeam(2, 0, t)} onChangeB={(t) => setQFTeam(2, 1, t)}
+              sfTeam={picks.sf[2]} locked={locked}
               onPickWinner={(t) => pickQFWinner(2, t)}
             />
             <div className="flex-1 min-h-4" />
             <QFCard
-              label={QF_INFO[3].label}
-              groups={[...QF_INFO[3].rank1Groups, ...QF_INFO[3].rank2Groups]}
+              label="רבע גמר 4"
               teamA={picks.qf[6]} teamB={picks.qf[7]}
-              candidatesA={qfCandsA(3)} candidatesB={qfCandsB(3)} sfWinner={picks.sf[3]} locked={locked}
-              onChangeA={(t) => setQFTeam(3, 0, t)} onChangeB={(t) => setQFTeam(3, 1, t)}
+              sfTeam={picks.sf[3]} locked={locked}
               onPickWinner={(t) => pickQFWinner(3, t)}
             />
+          </div>
+
+          {/* R16 Right column (matches 4–7, feeding QF3 and QF4) */}
+          <div className="flex flex-col gap-2 flex-1 min-w-[150px]">
+            <ColHeader>שמינית גמר</ColHeader>
+            {[4, 5, 6, 7].map((r16Idx) => (
+              <React.Fragment key={r16Idx}>
+                <R16Card
+                  label={getR16Label(r16Idx)}
+                  groups={getR16Groups(r16Idx)}
+                  teamA={picks.r16[r16Idx * 2]}
+                  teamB={picks.r16[r16Idx * 2 + 1]}
+                  candidates={r16Cands(r16Idx)}
+                  qfTeam={picks.qf[r16Idx]}
+                  locked={locked}
+                  onChangeA={(t) => setR16Team(r16Idx, 0, t)}
+                  onChangeB={(t) => setR16Team(r16Idx, 1, t)}
+                  onPickWinner={(t) => pickR16Winner(r16Idx, t)}
+                />
+                {r16Idx === 5 && <div className="flex-1 min-h-2" />}
+              </React.Fragment>
+            ))}
           </div>
         </div>
       </div>
@@ -437,14 +542,14 @@ function ColHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── QF Match Card ─────────────────────────────────────────────────────────────
+// ─── R16 Match Card ────────────────────────────────────────────────────────────
 
-function QFCard({
-  label, groups, teamA, teamB, candidatesA, candidatesB, sfWinner, locked,
+function R16Card({
+  label, groups, teamA, teamB, candidates, qfTeam, locked,
   onChangeA, onChangeB, onPickWinner,
 }: {
   label: string; groups: string[]; teamA: string; teamB: string;
-  candidatesA: string[]; candidatesB: string[]; sfWinner: string; locked: boolean;
+  candidates: string[]; qfTeam: string; locked: boolean;
   onChangeA: (t: string) => void; onChangeB: (t: string) => void;
   onPickWinner: (t: string) => void;
 }) {
@@ -452,15 +557,45 @@ function QFCard({
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
       <div className="text-xs text-gray-400 font-medium">{label}</div>
       <div className="text-xs text-gray-600">בתים: {groups.join(", ")}</div>
-      <TeamSelect value={teamA} onChange={onChangeA} options={candidatesA} locked={locked} />
+      <TeamSelect value={teamA} onChange={onChangeA} options={candidates} locked={locked} />
       <div className="text-center text-xs text-gray-600 font-bold">VS</div>
-      <TeamSelect value={teamB} onChange={onChangeB} options={candidatesB} locked={locked} />
+      <TeamSelect value={teamB} onChange={onChangeB} options={candidates} locked={locked} />
       {(teamA || teamB) && (
         <div className="pt-1 border-t border-gray-800 space-y-1">
-          <div className="text-xs text-gray-500 text-center">→ מי עולה?</div>
-          {teamA && <TeamBadge team={teamA} winner={sfWinner === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />}
-          {teamB && <TeamBadge team={teamB} winner={sfWinner === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />}
+          <div className="text-xs text-gray-500 text-center">→ מי עולה לרבע גמר?</div>
+          {teamA && <TeamBadge team={teamA} winner={qfTeam === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />}
+          {teamB && <TeamBadge team={teamB} winner={qfTeam === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── QF Match Card ─────────────────────────────────────────────────────────────
+
+function QFCard({
+  label, teamA, teamB, sfTeam, locked, onPickWinner,
+}: {
+  label: string; teamA: string; teamB: string;
+  sfTeam: string; locked: boolean; onPickWinner: (t: string) => void;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 space-y-2">
+      <div className="text-xs text-gray-400 font-medium">{label}</div>
+      {!teamA && !teamB ? (
+        <div className="text-xs text-gray-600 italic py-3 text-center">ממתין לשמינית גמר</div>
+      ) : (
+        <>
+          {teamA
+            ? <TeamBadge team={teamA} winner={sfTeam === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />
+            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+          }
+          <div className="text-center text-xs text-gray-600 font-bold">VS</div>
+          {teamB
+            ? <TeamBadge team={teamB} winner={sfTeam === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />
+            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+          }
+        </>
       )}
     </div>
   );
@@ -535,3 +670,4 @@ function FinalCard({
     </div>
   );
 }
+

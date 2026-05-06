@@ -121,6 +121,22 @@ describe("scoreGroupStanding", () => {
 
 describe("scoreKnockoutPredictions", () => {
   const results: KnockoutRes[] = [
+    { stage: "R16", slot: 1, teamName: "France" },
+    { stage: "R16", slot: 2, teamName: "Germany" },
+    { stage: "R16", slot: 3, teamName: "Brazil" },
+    { stage: "R16", slot: 4, teamName: "Argentina" },
+    { stage: "R16", slot: 5, teamName: "England" },
+    { stage: "R16", slot: 6, teamName: "Spain" },
+    { stage: "R16", slot: 7, teamName: "Portugal" },
+    { stage: "R16", slot: 8, teamName: "Netherlands" },
+    { stage: "R16", slot: 9, teamName: "Italy" },
+    { stage: "R16", slot: 10, teamName: "Belgium" },
+    { stage: "R16", slot: 11, teamName: "Croatia" },
+    { stage: "R16", slot: 12, teamName: "Morocco" },
+    { stage: "R16", slot: 13, teamName: "Japan" },
+    { stage: "R16", slot: 14, teamName: "USA" },
+    { stage: "R16", slot: 15, teamName: "Mexico" },
+    { stage: "R16", slot: 16, teamName: "Senegal" },
     { stage: "QF", slot: 1, teamName: "France" },
     { stage: "QF", slot: 2, teamName: "Germany" },
     { stage: "QF", slot: 3, teamName: "Brazil" },
@@ -137,6 +153,16 @@ describe("scoreKnockoutPredictions", () => {
     { stage: "FINAL", slot: 2, teamName: "Argentina" },
     { stage: "WINNER", slot: 1, teamName: "Argentina" },
   ];
+
+  it("awards 3 points per correct R16 team", () => {
+    const preds: KnockoutPred[] = [
+      { stage: "R16", slot: 1, teamName: "France" },
+      { stage: "R16", slot: 2, teamName: "Germany" },
+    ];
+    const scores = scoreKnockoutPredictions(preds, results);
+    expect(scores).toHaveLength(2);
+    expect(scores.every((s) => s.points === 3)).toBe(true);
+  });
 
   it("awards 5 points per correct QF team", () => {
     const preds: KnockoutPred[] = [
@@ -211,6 +237,7 @@ describe("scoreKnockoutPredictions", () => {
 
   it("returns correct eventType strings", () => {
     const preds: KnockoutPred[] = [
+      { stage: "R16", slot: 1, teamName: "France" },
       { stage: "QF", slot: 1, teamName: "France" },
       { stage: "SF", slot: 1, teamName: "France" },
       { stage: "FINAL", slot: 1, teamName: "Brazil" },
@@ -218,6 +245,7 @@ describe("scoreKnockoutPredictions", () => {
     ];
     const scores = scoreKnockoutPredictions(preds, results);
     const types = scores.map((s) => s.eventType);
+    expect(types).toContain("bracket_r16");
     expect(types).toContain("bracket_qf");
     expect(types).toContain("bracket_sf");
     expect(types).toContain("bracket_final");
@@ -226,6 +254,22 @@ describe("scoreKnockoutPredictions", () => {
 
   it("scores a full perfect bracket correctly", () => {
     const perfectPreds: KnockoutPred[] = [
+      { stage: "R16", slot: 1, teamName: "France" },
+      { stage: "R16", slot: 2, teamName: "Germany" },
+      { stage: "R16", slot: 3, teamName: "Brazil" },
+      { stage: "R16", slot: 4, teamName: "Argentina" },
+      { stage: "R16", slot: 5, teamName: "England" },
+      { stage: "R16", slot: 6, teamName: "Spain" },
+      { stage: "R16", slot: 7, teamName: "Portugal" },
+      { stage: "R16", slot: 8, teamName: "Netherlands" },
+      { stage: "R16", slot: 9, teamName: "Italy" },
+      { stage: "R16", slot: 10, teamName: "Belgium" },
+      { stage: "R16", slot: 11, teamName: "Croatia" },
+      { stage: "R16", slot: 12, teamName: "Morocco" },
+      { stage: "R16", slot: 13, teamName: "Japan" },
+      { stage: "R16", slot: 14, teamName: "USA" },
+      { stage: "R16", slot: 15, teamName: "Mexico" },
+      { stage: "R16", slot: 16, teamName: "Senegal" },
       { stage: "QF", slot: 1, teamName: "France" },
       { stage: "QF", slot: 2, teamName: "Germany" },
       { stage: "QF", slot: 3, teamName: "Brazil" },
@@ -244,7 +288,7 @@ describe("scoreKnockoutPredictions", () => {
     ];
     const scores = scoreKnockoutPredictions(perfectPreds, results);
     const total = scores.reduce((s, r) => s + r.points, 0);
-    // 8×5 + 4×10 + 2×20 + 1×40 = 40 + 40 + 40 + 40 = 160
-    expect(total).toBe(160);
+    // 16×3 + 8×5 + 4×10 + 2×20 + 1×40 = 48 + 40 + 40 + 40 + 40 = 208
+    expect(total).toBe(208);
   });
 });

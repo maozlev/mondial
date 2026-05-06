@@ -165,39 +165,6 @@ export default function AdminSettingsPage() {
   );
 }
 
-  const [settings, setSettings] = useState<Settings>({});
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const load = async () => {
-    const res = await fetch("/api/admin/settings");
-    setSettings(await res.json());
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const handleSave = async () => {
-    setSaving(true);
-    const res = await fetch("/api/admin/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        leaderboard_mode: settings.leaderboard_mode ?? "SEPARATE",
-        predictions_locked: settings.predictions_locked === "true",
-      }),
-    });
-    setSaving(false);
-    setMessage(res.ok ? "נשמר!" : "שגיאה");
-    load();
-  };
-
-  const isLocked = settings.predictions_locked === "true";
-  const mode = settings.leaderboard_mode ?? "SEPARATE";
-
-  return (
-    <div className="max-w-xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-yellow-400 mb-6">הגדרות מערכת</h1>
-
       <div className="space-y-6">
         {/* Leaderboard mode */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">

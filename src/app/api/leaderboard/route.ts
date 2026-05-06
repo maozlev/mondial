@@ -43,7 +43,7 @@ export async function GET() {
     }
   }
 
-  const data: UserVersionScore[] = users.map((u) => ({
+  const data: UserVersionScore[] = users.map((u: typeof users[number]) => ({
     userId: u.id,
     name: u.name,
     image: u.image,

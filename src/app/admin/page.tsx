@@ -84,7 +84,7 @@ export default async function AdminPage() {
         <StatCard label="משחקים" value={matchCount} />
         <StatCard label="משתמשים" value={userCount} />
         <StatCard label="כללי ניקוד" value={ruleCount} />
-        <StatCard label="סה&quot;כ ניחושים" value={predStats.reduce((s, p) => s + p.total, 0)} />
+        <StatCard label="סה&quot;כ ניחושים" value={predStats.reduce((s: number, p: { total: number }) => s + p.total, 0)} />
       </div>
 
       {/* Match status */}

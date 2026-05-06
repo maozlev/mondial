@@ -20,7 +20,7 @@ export default async function PredictionsPage() {
   const versionCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0 };
 
   for (const pred of predictions) {
-    const pts = pred.scores.reduce((s, sc) => s + sc.points, 0);
+    const pts = pred.scores.reduce((s: number, sc: { points: number }) => s + sc.points, 0);
     versionTotals[pred.version] = (versionTotals[pred.version] ?? 0) + pts;
     versionCounts[pred.version] = (versionCounts[pred.version] ?? 0) + 1;
   }
@@ -30,7 +30,7 @@ export default async function PredictionsPage() {
     prisma.appSetting.findMany(),
   ]);
 
-  const settingsMap = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const settingsMap = Object.fromEntries(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
   const globalLocked = settingsMap["predictions_locked"] === "true";
 
   const now = new Date();

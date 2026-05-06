@@ -33,7 +33,7 @@ export default async function AdminUsersPage() {
         3: { count: 0, points: 0 },
       };
       for (const pred of u.predictions) {
-        const pts = pred.scores.reduce((s, sc) => s + sc.points, 0);
+        const pts = pred.scores.reduce((s: number, sc: { points: number }) => s + sc.points, 0);
         vs[pred.version].count++;
         vs[pred.version].points += pts;
       }

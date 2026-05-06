@@ -14,7 +14,7 @@ const patchSettingsSchema = z.object({
 
 export async function GET() {
   const settings = await prisma.appSetting.findMany();
-  const result = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const result = Object.fromEntries(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
   return NextResponse.json(result);
 }
 

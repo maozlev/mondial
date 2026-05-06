@@ -67,7 +67,7 @@ export default async function AdminPage() {
 
   const leaderboard = [...userScores.values()]
     .map((u) => ({ ...u, best: Math.max(u.v[1], u.v[2], u.v[3]) }))
-    .sort((a, b) => b.best - a.best)
+    .sort((a: { best: number }, b: { best: number }) => b.best - a.best)
     .slice(0, 5);
 
   const deadlines = [1, 2, 3].map((v) => ({

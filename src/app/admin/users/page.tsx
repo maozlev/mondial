@@ -40,7 +40,7 @@ export default async function AdminUsersPage() {
       const bestPoints = Math.max(vs[1].points, vs[2].points, vs[3].points);
       return { ...u, vs, bestPoints };
     })
-    .sort((a, b) => b.bestPoints - a.bestPoints);
+    .sort((a: { bestPoints: number }, b: { bestPoints: number }) => b.bestPoints - a.bestPoints);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

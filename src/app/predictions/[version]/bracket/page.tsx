@@ -37,15 +37,27 @@ function emptyPicks(): Picks {
   return { qf: Array(8).fill(""), sf: Array(4).fill(""), final: Array(2).fill(""), winner: "" };
 }
 
-function getCandidates(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
+function addThirds(teams: string[], allThirds: string[]): string[] {
+  for (const t of allThirds) { if (!teams.includes(t)) teams.push(t); }
+  return teams.filter(Boolean);
+}
+
+function getCandidatesA(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
   const info = QF_INFO[qfIdx];
   const teams: string[] = [];
   for (const s of standings) {
     if ((info.rank1Groups as readonly string[]).includes(s.groupName) && s.rank1) teams.push(s.rank1);
+  }
+  return addThirds(teams, allThirds);
+}
+
+function getCandidatesB(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
+  const info = QF_INFO[qfIdx];
+  const teams: string[] = [];
+  for (const s of standings) {
     if ((info.rank2Groups as readonly string[]).includes(s.groupName) && s.rank2) teams.push(s.rank2);
   }
-  for (const t of allThirds) { if (!teams.includes(t)) teams.push(t); }
-  return teams.filter(Boolean);
+  return addThirds(teams, allThirds);
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -159,7 +171,8 @@ export default function BracketPage() {
   }, [versionNum]);
 
   const allThirds = standings.map((s) => s.rank3).filter(Boolean);
-  const qfCands = (idx: number) => getCandidates(idx, standings, allThirds);
+  const qfCandsA = (idx: number) => getCandidatesA(idx, standings, allThirds);
+  const qfCandsB = (idx: number) => getCandidatesB(idx, standings, allThirds);
 
   function setQFTeam(matchIdx: number, side: 0 | 1, team: string) {
     setPicks((prev) => {
@@ -266,8 +279,57 @@ export default function BracketPage() {
         <p className={`text-sm mb-4 ${message.startsWith("✓") ? "text-green-400" : "text-red-400"}`}>{message}</p>
       )}
 
-      {/* ─── 4-2-1-2-4 Bracket ──────────────────────────────────────────────── */}
-      <div className="overflow-x-auto -mx-3 px-3 pb-4">
+      {/* ─── Mobile stacked layout ───────────────────────────────────────── */}
+      <div className="md:hidden space-y-6 pb-4">
+
+        {/* QF matches */}
+        <div>
+          <ColHeader>רבע גמר</ColHeader>
+          <div className="mt-2 space-y-3">
+            {[0, 1, 2, 3].map((qfIdx) => (
+              <QFCard
+                key={qfIdx}
+                label={QF_INFO[qfIdx].label}
+                groups={[...QF_INFO[qfIdx].rank1Groups, ...QF_INFO[qfIdx].rank2Groups]}
+                teamA={picks.qf[qfIdx * 2]} teamB={picks.qf[qfIdx * 2 + 1]}
+                candidatesA={qfCandsA(qfIdx)} candidatesB={qfCandsB(qfIdx)}
+                sfWinner={picks.sf[qfIdx]} locked={locked}
+                onChangeA={(t) => setQFTeam(qfIdx, 0, t)}
+                onChangeB={(t) => setQFTeam(qfIdx, 1, t)}
+                onPickWinner={(t) => pickQFWinner(qfIdx, t)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* SF matches */}
+        <div>
+          <ColHeader>חצי גמר</ColHeader>
+          <div className="mt-2 space-y-3">
+            {([
+              { label: "חצי גמר 1", teamA: picks.sf[0], teamB: picks.sf[1], finalWinner: picks.final[0], sfIdx: 0 },
+              { label: "חצי גמר 2", teamA: picks.sf[2], teamB: picks.sf[3], finalWinner: picks.final[1], sfIdx: 1 },
+            ] as const).map(({ label, teamA, teamB, finalWinner, sfIdx }) => (
+              <SFCard key={sfIdx} label={label} teamA={teamA} teamB={teamB} finalWinner={finalWinner} locked={locked} onPickWinner={(t) => pickSFWinner(sfIdx, t)} />
+            ))}
+          </div>
+        </div>
+
+        {/* Final */}
+        <div>
+          <ColHeader>גמר</ColHeader>
+          <div className="mt-2">
+            <FinalCard
+              teamA={picks.final[0]} teamB={picks.final[1]}
+              winner={picks.winner} locked={locked}
+              onPickWinner={(t) => setPicks((p) => ({ ...p, winner: t }))}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Desktop 4-2-1-2-4 Bracket ──────────────────────────────────────── */}
+      <div className="hidden md:block overflow-x-auto -mx-3 px-3 pb-4">
         <div className="flex gap-2 min-w-[760px] items-stretch" dir="ltr">
 
           {/* Left QF column */}
@@ -277,7 +339,7 @@ export default function BracketPage() {
               label={QF_INFO[0].label}
               groups={[...QF_INFO[0].rank1Groups, ...QF_INFO[0].rank2Groups]}
               teamA={picks.qf[0]} teamB={picks.qf[1]}
-              candidates={qfCands(0)} sfWinner={picks.sf[0]} locked={locked}
+              candidatesA={qfCandsA(0)} candidatesB={qfCandsB(0)} sfWinner={picks.sf[0]} locked={locked}
               onChangeA={(t) => setQFTeam(0, 0, t)} onChangeB={(t) => setQFTeam(0, 1, t)}
               onPickWinner={(t) => pickQFWinner(0, t)}
             />
@@ -286,7 +348,7 @@ export default function BracketPage() {
               label={QF_INFO[1].label}
               groups={[...QF_INFO[1].rank1Groups, ...QF_INFO[1].rank2Groups]}
               teamA={picks.qf[2]} teamB={picks.qf[3]}
-              candidates={qfCands(1)} sfWinner={picks.sf[1]} locked={locked}
+              candidatesA={qfCandsA(1)} candidatesB={qfCandsB(1)} sfWinner={picks.sf[1]} locked={locked}
               onChangeA={(t) => setQFTeam(1, 0, t)} onChangeB={(t) => setQFTeam(1, 1, t)}
               onPickWinner={(t) => pickQFWinner(1, t)}
             />
@@ -334,7 +396,7 @@ export default function BracketPage() {
               label={QF_INFO[2].label}
               groups={[...QF_INFO[2].rank1Groups, ...QF_INFO[2].rank2Groups]}
               teamA={picks.qf[4]} teamB={picks.qf[5]}
-              candidates={qfCands(2)} sfWinner={picks.sf[2]} locked={locked}
+              candidatesA={qfCandsA(2)} candidatesB={qfCandsB(2)} sfWinner={picks.sf[2]} locked={locked}
               onChangeA={(t) => setQFTeam(2, 0, t)} onChangeB={(t) => setQFTeam(2, 1, t)}
               onPickWinner={(t) => pickQFWinner(2, t)}
             />
@@ -343,7 +405,7 @@ export default function BracketPage() {
               label={QF_INFO[3].label}
               groups={[...QF_INFO[3].rank1Groups, ...QF_INFO[3].rank2Groups]}
               teamA={picks.qf[6]} teamB={picks.qf[7]}
-              candidates={qfCands(3)} sfWinner={picks.sf[3]} locked={locked}
+              candidatesA={qfCandsA(3)} candidatesB={qfCandsB(3)} sfWinner={picks.sf[3]} locked={locked}
               onChangeA={(t) => setQFTeam(3, 0, t)} onChangeB={(t) => setQFTeam(3, 1, t)}
               onPickWinner={(t) => pickQFWinner(3, t)}
             />
@@ -378,11 +440,11 @@ function ColHeader({ children }: { children: React.ReactNode }) {
 // ─── QF Match Card ─────────────────────────────────────────────────────────────
 
 function QFCard({
-  label, groups, teamA, teamB, candidates, sfWinner, locked,
+  label, groups, teamA, teamB, candidatesA, candidatesB, sfWinner, locked,
   onChangeA, onChangeB, onPickWinner,
 }: {
   label: string; groups: string[]; teamA: string; teamB: string;
-  candidates: string[]; sfWinner: string; locked: boolean;
+  candidatesA: string[]; candidatesB: string[]; sfWinner: string; locked: boolean;
   onChangeA: (t: string) => void; onChangeB: (t: string) => void;
   onPickWinner: (t: string) => void;
 }) {
@@ -390,9 +452,9 @@ function QFCard({
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
       <div className="text-xs text-gray-400 font-medium">{label}</div>
       <div className="text-xs text-gray-600">בתים: {groups.join(", ")}</div>
-      <TeamSelect value={teamA} onChange={onChangeA} options={candidates} locked={locked} />
+      <TeamSelect value={teamA} onChange={onChangeA} options={candidatesA} locked={locked} />
       <div className="text-center text-xs text-gray-600 font-bold">VS</div>
-      <TeamSelect value={teamB} onChange={onChangeB} options={candidates} locked={locked} />
+      <TeamSelect value={teamB} onChange={onChangeB} options={candidatesB} locked={locked} />
       {(teamA || teamB) && (
         <div className="pt-1 border-t border-gray-800 space-y-1">
           <div className="text-xs text-gray-500 text-center">→ מי עולה?</div>

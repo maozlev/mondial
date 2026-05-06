@@ -21,7 +21,7 @@ export async function GET() {
     },
   });
 
-  const result = users.map((u) => {
+  const result = users.map((u: typeof users[number]) => {
     const vs: Record<number, { count: number; points: number }> = {
       1: { count: 0, points: 0 },
       2: { count: 0, points: 0 },
@@ -47,6 +47,6 @@ export async function GET() {
     };
   });
 
-  result.sort((a, b) => b.bestPoints - a.bestPoints);
+  result.sort((a: { bestPoints: number }, b: { bestPoints: number }) => b.bestPoints - a.bestPoints);
   return NextResponse.json(result);
 }

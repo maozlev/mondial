@@ -26,7 +26,7 @@ export default async function AdminUsersPage() {
   });
 
   const stats = users
-    .map((u) => {
+    .map((u: typeof users[number]) => {
       const vs: Record<number, { count: number; points: number }> = {
         1: { count: 0, points: 0 },
         2: { count: 0, points: 0 },

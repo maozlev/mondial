@@ -583,17 +583,17 @@ function QFCard({
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 space-y-2">
       <div className="text-xs text-gray-400 font-medium">{label}</div>
       {!teamA && !teamB ? (
-        <div className="text-xs text-gray-600 italic py-3 text-center">ממתין לשמינית גמר</div>
+        <div role="status" aria-label="ממתין לשמינית גמר" className="text-xs text-gray-600 italic py-3 text-center">ממתין לשמינית גמר</div>
       ) : (
         <>
           {teamA
             ? <TeamBadge team={teamA} winner={sfTeam === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />
-            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+            : <div role="status" aria-label="ממתין לנבחרת" className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
           }
           <div className="text-center text-xs text-gray-600 font-bold">VS</div>
           {teamB
             ? <TeamBadge team={teamB} winner={sfTeam === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />
-            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+            : <div role="status" aria-label="ממתין לנבחרת" className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
           }
         </>
       )}

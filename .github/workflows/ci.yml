@@ -28,6 +28,9 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
+        env:
+          DATABASE_URL: "postgresql://fake:fake@localhost:5432/fake"
+          AUTH_SECRET: "ci-secret-placeholder-32-chars-long"
 
       - name: Run tests
         run: npm test

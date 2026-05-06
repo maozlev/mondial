@@ -1,276 +1,474 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getFlagUrl } from "@/lib/flags";
-import { COUNTRY_CODES } from "@/lib/flags";
 
-const ALL_TEAMS = Object.keys(COUNTRY_CODES);
+// ─── 2026 WC Official Bracket Structure ───────────────────────────────────────
+// Maps each QF match (1-4) to the group positions that can reach it:
+//   QF1 (M97): 1st from E,F,I  |  2nd from A,B,C  (+3rd wildcards)
+//   QF2 (M98): 1st from D,G,H  |  2nd from J,K,L  (+3rd wildcards)
+//   QF3 (M99): 1st from A,C,L  |  2nd from E,F,I  (+3rd wildcards)
+//   QF4 (M100): 1st from B,J,K |  2nd from D,G,H  (+3rd wildcards)
+// SF1 = winner(QF1) vs winner(QF2)  →  left finalist
+// SF2 = winner(QF3) vs winner(QF4)  →  right finalist
 
-type Stage = "QF" | "SF" | "FINAL" | "WINNER";
+const QF_INFO = [
+  { id: 1, label: "רבע גמר 1", rank1Groups: ["E","F","I"], rank2Groups: ["A","B","C"] },
+  { id: 2, label: "רבע גמר 2", rank1Groups: ["D","G","H"], rank2Groups: ["J","K","L"] },
+  { id: 3, label: "רבע גמר 3", rank1Groups: ["A","C","L"], rank2Groups: ["E","F","I"] },
+  { id: 4, label: "רבע גמר 4", rank1Groups: ["B","J","K"], rank2Groups: ["D","G","H"] },
+] as const;
 
-// slot counts per stage
-const STAGE_SLOTS: Record<Stage, number> = {
-  QF: 8,
-  SF: 4,
-  FINAL: 2,
-  WINNER: 1,
+type StandingPred = {
+  groupName: string; rank1: string; rank2: string; rank3: string; rank4: string;
 };
+type KnockoutRow = { stage: string; slot: number; teamName: string };
 
-const STAGE_LABELS: Record<Stage, string> = {
-  QF: "רבע גמר",
-  SF: "חצי גמר",
-  FINAL: "גמר",
-  WINNER: "אלוף",
+type Picks = {
+  qf: string[];     // 8 slots: pairs [qf1a, qf1b, qf2a, qf2b, qf3a, qf3b, qf4a, qf4b]
+  sf: string[];     // 4 slots: QF winners
+  final: string[];  // 2 slots: SF winners
+  winner: string;
 };
-
-type Picks = Record<Stage, string[]>;
 
 function emptyPicks(): Picks {
-  return {
-    QF: Array(8).fill(""),
-    SF: Array(4).fill(""),
-    FINAL: Array(2).fill(""),
-    WINNER: Array(1).fill(""),
-  };
+  return { qf: Array(8).fill(""), sf: Array(4).fill(""), final: Array(2).fill(""), winner: "" };
+}
+
+function getCandidates(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
+  const info = QF_INFO[qfIdx];
+  const teams: string[] = [];
+  for (const s of standings) {
+    if ((info.rank1Groups as readonly string[]).includes(s.groupName) && s.rank1) teams.push(s.rank1);
+    if ((info.rank2Groups as readonly string[]).includes(s.groupName) && s.rank2) teams.push(s.rank2);
+  }
+  for (const t of allThirds) { if (!teams.includes(t)) teams.push(t); }
+  return teams.filter(Boolean);
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function TeamBadge({
+  team, onClick, winner, locked,
+}: {
+  team: string; onClick?: () => void; winner?: boolean; locked?: boolean;
+}) {
+  const flag = team ? getFlagUrl(team) : "";
+  return (
+    <button
+      type="button"
+      onClick={locked ? undefined : onClick}
+      className={`
+        flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium w-full
+        transition-all duration-150 border
+        ${winner
+          ? "bg-yellow-500/20 border-yellow-400 text-yellow-300 ring-1 ring-yellow-400"
+          : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+        }
+        ${locked ? "cursor-default" : "cursor-pointer"}
+      `}
+    >
+      {flag
+        ? <img src={flag} alt={team} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
+        : <div className="w-6 h-4 rounded-sm bg-gray-700 flex-shrink-0" />
+      }
+      <span className="truncate flex-1 text-left">{team || "—"}</span>
+      {winner && <span className="text-yellow-400 text-xs flex-shrink-0">✓</span>}
+    </button>
+  );
 }
 
 function TeamSelect({
-  value,
-  onChange,
-  options,
-  locked,
-  placeholder,
+  value, onChange, options, locked,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-  locked: boolean;
-  placeholder: string;
+  value: string; onChange: (v: string) => void; options: string[]; locked: boolean;
 }) {
-  const flagUrl = value ? getFlagUrl(value) : "";
+  const flag = value ? getFlagUrl(value) : "";
+  if (locked) {
+    return (
+      <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm">
+        {flag
+          ? <img src={flag} alt={value} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
+          : <div className="w-6 h-4 rounded-sm bg-gray-700 flex-shrink-0" />
+        }
+        <span className="text-white truncate">{value || "—"}</span>
+      </div>
+    );
+  }
   return (
-    <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 min-w-0">
-      {flagUrl ? (
-        <img
-          src={flagUrl}
-          alt={value}
-          className="w-6 h-4 object-cover rounded-sm flex-shrink-0"
-        />
-      ) : (
-        <div className="w-6 h-4 flex-shrink-0 rounded-sm bg-gray-700" />
-      )}
-      {locked ? (
-        <span className="text-sm text-white flex-1 truncate">
-          {value || <span className="text-gray-500">{placeholder}</span>}
-        </span>
-      ) : (
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1 min-w-0 bg-gray-800 text-sm text-white focus:outline-none cursor-pointer"
-        >
-          <option value="">{placeholder}</option>
-          {options.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      )}
+    <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+      {flag
+        ? <img src={flag} alt={value} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
+        : <div className="w-6 h-4 rounded-sm bg-gray-700 flex-shrink-0" />
+      }
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 bg-gray-800 text-sm text-white focus:outline-none cursor-pointer"
+      >
+        <option value="">— בחר —</option>
+        {options.map((t) => <option key={t} value={t}>{t}</option>)}
+      </select>
     </div>
   );
 }
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function BracketPage() {
   const { version } = useParams<{ version: string }>();
   const versionNum = parseInt(version, 10);
 
   const [picks, setPicks] = useState<Picks>(emptyPicks());
+  const [standings, setStandings] = useState<StandingPred[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [versionLocked, setVersionLocked] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [deadline, setDeadline] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load settings
     fetch("/api/admin/settings")
       .then((r) => r.json())
       .then((s: Record<string, string>) => {
         const globalLocked = s["predictions_locked"] === "true";
         const dl = s[`version_${versionNum}_deadline`] ?? null;
         const pastDeadline = dl ? new Date() > new Date(dl) : false;
-        setVersionLocked(globalLocked || pastDeadline);
+        setLocked(globalLocked || pastDeadline);
         setDeadline(dl);
       });
 
-    // Load existing picks
+    fetch(`/api/predictions/${versionNum}/standings`)
+      .then((r) => r.json())
+      .then((data: StandingPred[]) => { if (Array.isArray(data)) setStandings(data); });
+
     fetch(`/api/predictions/${versionNum}/knockout`)
       .then((r) => r.json())
-      .then(
-        (
-          data: { stage: Stage; slot: number; teamName: string }[]
-        ) => {
-          if (!Array.isArray(data) || data.length === 0) return;
-          const next = emptyPicks();
-          for (const row of data) {
-            const arr = next[row.stage];
-            if (arr && row.slot >= 1 && row.slot <= arr.length) {
-              arr[row.slot - 1] = row.teamName;
-            }
-          }
-          setPicks(next);
+      .then((data: KnockoutRow[]) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        const next = emptyPicks();
+        for (const row of data) {
+          if (row.stage === "QF" && row.slot >= 1 && row.slot <= 8) next.qf[row.slot - 1] = row.teamName;
+          else if (row.stage === "SF" && row.slot >= 1 && row.slot <= 4) next.sf[row.slot - 1] = row.teamName;
+          else if (row.stage === "FINAL" && row.slot >= 1 && row.slot <= 2) next.final[row.slot - 1] = row.teamName;
+          else if (row.stage === "WINNER" && row.slot === 1) next.winner = row.teamName;
         }
-      );
+        setPicks(next);
+      });
   }, [versionNum]);
 
-  function setSlot(stage: Stage, idx: number, team: string) {
+  const allThirds = standings.map((s) => s.rank3).filter(Boolean);
+  const qfCands = (idx: number) => getCandidates(idx, standings, allThirds);
+
+  function setQFTeam(matchIdx: number, side: 0 | 1, team: string) {
     setPicks((prev) => {
-      const next = { ...prev, [stage]: [...prev[stage]] };
-      next[stage][idx] = team;
-
-      // Cascade: if a team is cleared or changed, remove it from downstream stages
-      const stageOrder: Stage[] = ["QF", "SF", "FINAL", "WINNER"];
-      const stageIdx = stageOrder.indexOf(stage);
-      const downstreamStages = stageOrder.slice(stageIdx + 1);
-
-      for (const ds of downstreamStages) {
-        // Get the valid teams for ds: union of teams in the immediately preceding stage
-        const prevStage = stageOrder[stageOrder.indexOf(ds) - 1];
-        const validTeams = new Set(next[prevStage].filter(Boolean));
-        next[ds] = next[ds].map((t) => (validTeams.has(t) ? t : ""));
+      const next = { ...prev, qf: [...prev.qf] };
+      const oldTeam = prev.qf[matchIdx * 2 + side];
+      next.qf[matchIdx * 2 + side] = team;
+      // Clear SF/Final/Winner if old team was advanced
+      if (prev.sf[matchIdx] === oldTeam) {
+        next.sf = [...prev.sf]; next.sf[matchIdx] = "";
+        const fIdx = matchIdx <= 1 ? 0 : 1;
+        if (prev.final[fIdx] === oldTeam) {
+          next.final = [...prev.final]; next.final[fIdx] = "";
+          if (prev.winner === oldTeam) next.winner = "";
+        }
       }
-
       return next;
     });
   }
 
-  // Compute options for each stage (must be selected in prior stage)
-  function optionsFor(stage: Stage): string[] {
-    const stageOrder: Stage[] = ["QF", "SF", "FINAL", "WINNER"];
-    const idx = stageOrder.indexOf(stage);
-    if (idx === 0) return ALL_TEAMS;
-    const prevStage = stageOrder[idx - 1];
-    return picks[prevStage].filter(Boolean);
+  function pickQFWinner(matchIdx: number, team: string) {
+    setPicks((prev) => {
+      const next = { ...prev, sf: [...prev.sf] };
+      const old = prev.sf[matchIdx];
+      next.sf[matchIdx] = team;
+      const fIdx = matchIdx <= 1 ? 0 : 1;
+      if (old && prev.final[fIdx] === old) {
+        next.final = [...prev.final]; next.final[fIdx] = "";
+        if (prev.winner === old) next.winner = "";
+      }
+      return next;
+    });
+  }
+
+  function pickSFWinner(sfIdx: number, team: string) {
+    setPicks((prev) => {
+      const next = { ...prev, final: [...prev.final] };
+      const old = prev.final[sfIdx];
+      next.final[sfIdx] = team;
+      if (old && prev.winner === old) next.winner = "";
+      return next;
+    });
   }
 
   const handleSave = async () => {
-    setSaving(true);
-    setMessage("");
-
-    const stageOrder: Stage[] = ["QF", "SF", "FINAL", "WINNER"];
-    const pickPayload: { stage: Stage; slot: number; teamName: string }[] = [];
-    for (const stage of stageOrder) {
-      picks[stage].forEach((team, idx) => {
-        if (team) {
-          pickPayload.push({ stage, slot: idx + 1, teamName: team });
-        }
-      });
-    }
+    setSaving(true); setMessage("");
+    const payload: KnockoutRow[] = [];
+    picks.qf.forEach((t, i) => { if (t) payload.push({ stage: "QF", slot: i + 1, teamName: t }); });
+    picks.sf.forEach((t, i) => { if (t) payload.push({ stage: "SF", slot: i + 1, teamName: t }); });
+    picks.final.forEach((t, i) => { if (t) payload.push({ stage: "FINAL", slot: i + 1, teamName: t }); });
+    if (picks.winner) payload.push({ stage: "WINNER", slot: 1, teamName: picks.winner });
 
     const res = await fetch(`/api/predictions/${versionNum}/knockout`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ picks: pickPayload }),
+      body: JSON.stringify({ picks: payload }),
     });
     setSaving(false);
-
-    if (res.ok) {
-      setMessage("✓ הברקט נשמר!");
-    } else {
-      const err = await res.json();
-      setMessage(err.error ?? "שגיאה בשמירה");
-    }
+    if (res.ok) setMessage("✓ הברקט נשמר!");
+    else { const err = await res.json(); setMessage(err.error ?? "שגיאה בשמירה"); }
   };
 
   const deadlineLabel = deadline
     ? new Date(deadline).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })
     : null;
 
-  const stages: Stage[] = ["QF", "SF", "FINAL", "WINNER"];
-
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-3 py-6" dir="rtl">
       {/* Sub-nav */}
       <div className="flex gap-1 mb-6 border-b border-gray-800 pb-0 overflow-x-auto">
-        <Link
-          href={`/predictions/${versionNum}`}
-          className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent"
-        >
+        <Link href={`/predictions/${versionNum}`} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent">
           תוצאות משחקים
         </Link>
-        <Link
-          href={`/predictions/${versionNum}/standings`}
-          className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent"
-        >
+        <Link href={`/predictions/${versionNum}/standings`} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent">
           עמדות קבוצות
         </Link>
-        <span className="px-3 py-2 text-sm text-white font-semibold whitespace-nowrap border-b-2 border-yellow-400">
-          ברקט
-        </span>
+        <span className="px-3 py-2 text-sm text-white font-semibold whitespace-nowrap border-b-2 border-yellow-400">ברקט</span>
       </div>
 
-      <h1 className="text-xl font-bold text-white mb-1">
-        ברקט — גרסה {versionNum}
-      </h1>
-      <p className="text-gray-400 text-sm mb-4">
-        בחר את הקבוצות שיגיעו לכל שלב (בחירות מתוך שלב קודם בלבד)
-      </p>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold text-white">ברקט — גרסה {versionNum}</h1>
+          <p className="text-gray-400 text-sm">ניחוש שלב הנוקאאוט לפי עמדות הבתים</p>
+        </div>
+        {deadlineLabel && <p className="text-xs text-gray-500">דד-ליין: {deadlineLabel}</p>}
+      </div>
 
-      {deadlineLabel && (
-        <p className="text-xs text-gray-500 mb-4">דד-ליין: {deadlineLabel}</p>
-      )}
-
-      {versionLocked && (
+      {locked && (
         <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm mb-4">
           🔒 הגרסה נעולה — לא ניתן לשנות ניחושים
         </div>
       )}
 
-      {message && (
-        <p
-          className={`text-sm mb-4 ${
-            message.startsWith("✓") ? "text-green-400" : "text-red-400"
-          }`}
-        >
-          {message}
-        </p>
+      {standings.length === 0 && (
+        <div className="bg-blue-900/40 border border-blue-700 text-blue-300 rounded-lg px-4 py-3 text-sm mb-4">
+          💡 מלא קודם את{" "}
+          <Link href={`/predictions/${versionNum}/standings`} className="underline text-blue-200">
+            עמדות הקבוצות
+          </Link>{" "}
+          — הברקט יציג אוטומטית את הקבוצות לפי הבית שלהן
+        </div>
       )}
 
-      {/* Bracket columns — horizontal scroll on mobile */}
-      <div className="overflow-x-auto -mx-4 px-4 mb-8">
-        <div className="flex gap-3 min-w-[640px]">
-          {stages.map((stage) => (
-            <div key={stage} className="flex flex-col gap-2 flex-1 min-w-[140px]">
-              <h2 className="text-xs font-bold text-yellow-400 text-center uppercase tracking-wide pb-1 border-b border-gray-800">
-                {STAGE_LABELS[stage]}
-              </h2>
-              {Array.from({ length: STAGE_SLOTS[stage] }).map((_, idx) => (
-                <TeamSelect
-                  key={idx}
-                  value={picks[stage][idx] ?? ""}
-                  onChange={(v) => setSlot(stage, idx, v)}
-                  options={optionsFor(stage)}
-                  locked={versionLocked}
-                  placeholder={`—`}
-                />
-              ))}
-            </div>
-          ))}
+      {message && (
+        <p className={`text-sm mb-4 ${message.startsWith("✓") ? "text-green-400" : "text-red-400"}`}>{message}</p>
+      )}
+
+      {/* ─── 4-2-1-2-4 Bracket ──────────────────────────────────────────────── */}
+      <div className="overflow-x-auto -mx-3 px-3 pb-4">
+        <div className="flex gap-2 min-w-[760px] items-stretch" dir="ltr">
+
+          {/* Left QF column */}
+          <div className="flex flex-col gap-3 flex-1 min-w-[170px]">
+            <ColHeader>רבע גמר</ColHeader>
+            <QFCard
+              label={QF_INFO[0].label}
+              groups={[...QF_INFO[0].rank1Groups, ...QF_INFO[0].rank2Groups]}
+              teamA={picks.qf[0]} teamB={picks.qf[1]}
+              candidates={qfCands(0)} sfWinner={picks.sf[0]} locked={locked}
+              onChangeA={(t) => setQFTeam(0, 0, t)} onChangeB={(t) => setQFTeam(0, 1, t)}
+              onPickWinner={(t) => pickQFWinner(0, t)}
+            />
+            <div className="flex-1 min-h-4" />
+            <QFCard
+              label={QF_INFO[1].label}
+              groups={[...QF_INFO[1].rank1Groups, ...QF_INFO[1].rank2Groups]}
+              teamA={picks.qf[2]} teamB={picks.qf[3]}
+              candidates={qfCands(1)} sfWinner={picks.sf[1]} locked={locked}
+              onChangeA={(t) => setQFTeam(1, 0, t)} onChangeB={(t) => setQFTeam(1, 1, t)}
+              onPickWinner={(t) => pickQFWinner(1, t)}
+            />
+          </div>
+
+          {/* Left SF column */}
+          <div className="flex flex-col justify-center min-w-[155px]">
+            <div className="mb-6" />
+            <ColHeader>חצי גמר</ColHeader>
+            <SFCard
+              label="חצי גמר 1"
+              teamA={picks.sf[0]} teamB={picks.sf[1]}
+              finalWinner={picks.final[0]} locked={locked}
+              onPickWinner={(t) => pickSFWinner(0, t)}
+            />
+          </div>
+
+          {/* Final + Winner column */}
+          <div className="flex flex-col justify-center min-w-[145px]">
+            <div className="mb-12" />
+            <ColHeader>גמר</ColHeader>
+            <FinalCard
+              teamA={picks.final[0]} teamB={picks.final[1]}
+              winner={picks.winner} locked={locked}
+              onPickWinner={(t) => setPicks((p) => ({ ...p, winner: t }))}
+            />
+          </div>
+
+          {/* Right SF column */}
+          <div className="flex flex-col justify-center min-w-[155px]">
+            <div className="mb-6" />
+            <ColHeader>חצי גמר</ColHeader>
+            <SFCard
+              label="חצי גמר 2"
+              teamA={picks.sf[2]} teamB={picks.sf[3]}
+              finalWinner={picks.final[1]} locked={locked}
+              onPickWinner={(t) => pickSFWinner(1, t)}
+            />
+          </div>
+
+          {/* Right QF column */}
+          <div className="flex flex-col gap-3 flex-1 min-w-[170px]">
+            <ColHeader>רבע גמר</ColHeader>
+            <QFCard
+              label={QF_INFO[2].label}
+              groups={[...QF_INFO[2].rank1Groups, ...QF_INFO[2].rank2Groups]}
+              teamA={picks.qf[4]} teamB={picks.qf[5]}
+              candidates={qfCands(2)} sfWinner={picks.sf[2]} locked={locked}
+              onChangeA={(t) => setQFTeam(2, 0, t)} onChangeB={(t) => setQFTeam(2, 1, t)}
+              onPickWinner={(t) => pickQFWinner(2, t)}
+            />
+            <div className="flex-1 min-h-4" />
+            <QFCard
+              label={QF_INFO[3].label}
+              groups={[...QF_INFO[3].rank1Groups, ...QF_INFO[3].rank2Groups]}
+              teamA={picks.qf[6]} teamB={picks.qf[7]}
+              candidates={qfCands(3)} sfWinner={picks.sf[3]} locked={locked}
+              onChangeA={(t) => setQFTeam(3, 0, t)} onChangeB={(t) => setQFTeam(3, 1, t)}
+              onPickWinner={(t) => pickQFWinner(3, t)}
+            />
+          </div>
         </div>
       </div>
 
-      {!versionLocked && (
-        <div className="flex justify-end">
+      {!locked && (
+        <div className="flex justify-center mt-6">
           <button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-bold px-6 py-2 rounded-lg transition-colors"
+            onClick={handleSave} disabled={saving}
+            className="bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-bold px-8 py-2 rounded-lg transition-colors"
           >
             {saving ? "שומר..." : "שמור ברקט"}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Column header ─────────────────────────────────────────────────────────────
+
+function ColHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-center text-xs font-bold text-yellow-400 uppercase tracking-wide py-1 border-b border-gray-800 mb-1">
+      {children}
+    </div>
+  );
+}
+
+// ─── QF Match Card ─────────────────────────────────────────────────────────────
+
+function QFCard({
+  label, groups, teamA, teamB, candidates, sfWinner, locked,
+  onChangeA, onChangeB, onPickWinner,
+}: {
+  label: string; groups: string[]; teamA: string; teamB: string;
+  candidates: string[]; sfWinner: string; locked: boolean;
+  onChangeA: (t: string) => void; onChangeB: (t: string) => void;
+  onPickWinner: (t: string) => void;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 space-y-2">
+      <div className="text-xs text-gray-400 font-medium">{label}</div>
+      <div className="text-xs text-gray-600">בתים: {groups.join(", ")}</div>
+      <TeamSelect value={teamA} onChange={onChangeA} options={candidates} locked={locked} />
+      <div className="text-center text-xs text-gray-600 font-bold">VS</div>
+      <TeamSelect value={teamB} onChange={onChangeB} options={candidates} locked={locked} />
+      {(teamA || teamB) && (
+        <div className="pt-1 border-t border-gray-800 space-y-1">
+          <div className="text-xs text-gray-500 text-center">→ מי עולה?</div>
+          {teamA && <TeamBadge team={teamA} winner={sfWinner === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />}
+          {teamB && <TeamBadge team={teamB} winner={sfWinner === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SF Match Card ─────────────────────────────────────────────────────────────
+
+function SFCard({
+  label, teamA, teamB, finalWinner, locked, onPickWinner,
+}: {
+  label: string; teamA: string; teamB: string;
+  finalWinner: string; locked: boolean; onPickWinner: (t: string) => void;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 space-y-2">
+      <div className="text-xs text-gray-400 font-medium">{label}</div>
+      {!teamA && !teamB ? (
+        <div className="text-xs text-gray-600 italic py-3 text-center">ממתין לרבע גמר</div>
+      ) : (
+        <>
+          {teamA
+            ? <TeamBadge team={teamA} winner={finalWinner === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />
+            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+          }
+          <div className="text-center text-xs text-gray-600 font-bold">VS</div>
+          {teamB
+            ? <TeamBadge team={teamB} winner={finalWinner === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />
+            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+          }
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Final Card ────────────────────────────────────────────────────────────────
+
+function FinalCard({
+  teamA, teamB, winner, locked, onPickWinner,
+}: {
+  teamA: string; teamB: string; winner: string; locked: boolean; onPickWinner: (t: string) => void;
+}) {
+  return (
+    <div className="bg-gray-900 border border-yellow-800/40 rounded-xl p-3 space-y-2">
+      <div className="text-xs text-yellow-400 font-bold text-center">🏆 גמר</div>
+      {!teamA && !teamB ? (
+        <div className="text-xs text-gray-600 italic py-3 text-center">ממתין לחצי גמר</div>
+      ) : (
+        <>
+          {teamA
+            ? <TeamBadge team={teamA} winner={winner === teamA} locked={locked} onClick={() => onPickWinner(teamA)} />
+            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+          }
+          <div className="text-center text-xs text-gray-600 font-bold">VS</div>
+          {teamB
+            ? <TeamBadge team={teamB} winner={winner === teamB} locked={locked} onClick={() => onPickWinner(teamB)} />
+            : <div className="h-9 bg-gray-800 rounded-lg border border-dashed border-gray-700" />
+          }
+          {winner && (
+            <div className="pt-1 border-t border-yellow-800/40">
+              <div className="text-xs text-yellow-400 text-center mb-1">🥇 האלוף</div>
+              <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2">
+                {getFlagUrl(winner) && (
+                  <img src={getFlagUrl(winner)} alt={winner} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
+                )}
+                <span className="text-yellow-300 font-bold text-sm">{winner}</span>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

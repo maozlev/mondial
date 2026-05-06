@@ -60,7 +60,7 @@ export default async function AdminPage() {
         v: { 1: 0, 2: 0, 3: 0 },
       });
     }
-    const pts = pred.scores.reduce((s, sc) => s + sc.points, 0);
+    const pts = pred.scores.reduce((s: number, sc: { points: number }) => s + sc.points, 0);
     userScores.get(uid)!.v[pred.version] =
       (userScores.get(uid)!.v[pred.version] ?? 0) + pts;
   }

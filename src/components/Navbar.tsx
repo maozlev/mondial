@@ -8,43 +8,53 @@ export function Navbar() {
   const isAdmin = session?.user?.role === "ADMIN";
 
   return (
-    <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-6">
-        <Link href="/" className="text-green-400 font-bold text-lg tracking-tight">
-          ⚽ מונדיאל 2026
+    <nav className="bg-gray-900 border-b border-gray-800 px-3 py-2.5 flex items-center justify-between gap-2 min-w-0">
+      {/* Left: logo + nav links (scrollable on mobile) */}
+      <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide min-w-0 flex-1">
+        <Link
+          href="/"
+          className="text-green-400 font-bold text-base tracking-tight flex-shrink-0 ml-1 mr-3"
+        >
+          ⚽ 2026
         </Link>
-        <Link href="/" className="text-sm text-gray-300 hover:text-white">
+        <Link href="/" className="text-xs sm:text-sm text-gray-300 hover:text-white flex-shrink-0 px-2 py-1">
           לוח מובילים
         </Link>
+        <Link href="/matches" className="text-xs sm:text-sm text-gray-300 hover:text-white flex-shrink-0 px-2 py-1">
+          משחקים
+        </Link>
         {session && (
-          <Link href="/predictions" className="text-sm text-gray-300 hover:text-white">
+          <Link href="/predictions" className="text-xs sm:text-sm text-gray-300 hover:text-white flex-shrink-0 px-2 py-1">
             הניחושים שלי
           </Link>
         )}
         {isAdmin && (
-          <Link href="/admin" className="text-sm text-yellow-400 hover:text-yellow-300">
+          <Link href="/admin" className="text-xs sm:text-sm text-yellow-400 hover:text-yellow-300 flex-shrink-0 px-2 py-1">
             ניהול
           </Link>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Right: user */}
+      <div className="flex items-center gap-2 flex-shrink-0">
         {session ? (
           <>
-            <span className="text-sm text-gray-400">{session.user?.name}</span>
+            <span className="hidden sm:block text-xs text-gray-400 truncate max-w-[120px]">
+              {session.user?.name}
+            </span>
             <button
               onClick={() => signOut()}
-              className="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded"
+              className="text-xs bg-gray-800 hover:bg-gray-700 px-2.5 py-1 rounded whitespace-nowrap"
             >
-              התנתקות
+              יציאה
             </button>
           </>
         ) : (
           <button
             onClick={() => signIn("google")}
-            className="text-sm bg-green-600 hover:bg-green-500 px-3 py-1 rounded font-medium"
+            className="text-xs bg-green-600 hover:bg-green-500 px-2.5 py-1 rounded font-medium whitespace-nowrap"
           >
-            התחברות עם Google
+            כניסה
           </button>
         )}
       </div>

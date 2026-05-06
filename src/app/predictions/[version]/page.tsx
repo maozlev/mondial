@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { MatchStage } from "@prisma/client";
+import Link from "next/link";
+import type { MatchStage } from "@prisma/client";
+import { MatchCard } from "@/components/MatchCard";
 
 interface Match {
   id: string;
@@ -12,6 +14,8 @@ interface Match {
   groupName: string | null;
   status: string;
   scheduledAt: string;
+  homeScore: number | null;
+  awayScore: number | null;
 }
 
 interface PredictionData {
@@ -41,8 +45,22 @@ export default function PredictionVersionPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [activeStage, setActiveStage] = useState<string>("GROUP");
+  const [versionLocked, setVersionLocked] = useState(false);
+  const [deadline, setDeadline] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check global settings + version deadline
+    fetch("/api/admin/settings")
+      .then((r) => r.json())
+      .then((s: Record<string, string>) => {
+        const globalLocked = s["predictions_locked"] === "true";
+        const dl = s[`version_${versionNum}_deadline`] ?? null;
+        const pastDeadline = dl ? new Date() > new Date(dl) : false;
+        setVersionLocked(globalLocked || pastDeadline);
+        setDeadline(dl);
+      })
+      .catch(() => {});
+
     fetch("/api/matches")
       .then((r) => r.json())
       .then(setMatches);
@@ -62,7 +80,6 @@ export default function PredictionVersionPage() {
   }, [versionNum]);
 
   const stages = [...new Set(matches.map((m) => m.stage))];
-
   const visibleMatches = matches.filter((m) => m.stage === activeStage);
 
   const handleChange = (matchId: string, side: "home" | "away", value: string) => {
@@ -101,14 +118,86 @@ export default function PredictionVersionPage() {
       setSavedPredictions(newSaved);
       setMessage(`נשמרו ${data.saved.length} ניחושים`);
     } else {
-      setMessage("שגיאה בשמירה");
+      setMessage((data as { error?: string }).error ?? "שגיאה בשמירה");
     }
   };
 
+  const deadlinePast = deadline ? new Date() > new Date(deadline) : false;
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-green-400 mb-2">גרסה {versionNum}</h1>
-      <p className="text-gray-400 mb-6 text-sm">בחר שלב ומלא תחזיות</p>
+    <div className="max-w-3xl mx-auto px-3 py-8 sm:px-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-1">
+        <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center font-bold text-white text-sm">
+          {versionNum}
+        </div>
+        <h1 className="text-2xl font-bold text-white">גרסה {versionNum}</h1>
+        {versionLocked && (
+          <span className="text-xs bg-orange-900/60 text-orange-300 px-2 py-0.5 rounded-full">
+            🔒 נעול
+          </span>
+        )}
+      </div>
+
+      {/* Progress + deadline */}
+      <div className="mb-5">
+        {deadline && (
+          <p className={`text-xs mb-2 ${deadlinePast ? "text-red-400" : "text-blue-400"}`}>
+            {deadlinePast ? "⏰ הדד-ליין עבר" : "⏰ פתוח עד"}{" "}
+            {new Date(deadline).toLocaleString("he-IL", {
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Jerusalem",
+            })}
+          </p>
+        )}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-600 rounded-full transition-all"
+              style={{
+                width:
+                  matches.length > 0
+                    ? `${Math.round((Object.keys(predictions).length / matches.length) * 100)}%`
+                    : "0%",
+              }}
+            />
+          </div>
+          <span className="text-xs text-gray-400 flex-shrink-0">
+            {Object.keys(predictions).length} / {matches.length} ניחושים
+          </span>
+        </div>
+      </div>
+
+      {/* Lock banner */}
+      {versionLocked && (
+        <div className="bg-orange-900/30 border border-orange-800 rounded-xl px-4 py-3 mb-6 text-sm text-orange-300">
+          {deadlinePast
+            ? "⏰ הדד-ליין לגרסה זו עבר — לא ניתן לשנות ניחושים"
+            : "🔒 הניחושים נעולים כרגע — לא ניתן לשמור"}
+        </div>
+      )}
+
+      {/* Sub-nav */}
+      <div className="flex gap-1 mb-6 border-b border-gray-800 pb-0 overflow-x-auto">
+        <span className="px-3 py-2 text-sm text-white font-semibold whitespace-nowrap border-b-2 border-yellow-400">
+          תוצאות משחקים
+        </span>
+        <Link
+          href={`/predictions/${versionNum}/standings`}
+          className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent"
+        >
+          עמדות קבוצות
+        </Link>
+        <Link
+          href={`/predictions/${versionNum}/bracket`}
+          className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent"
+        >
+          ברקט
+        </Link>
+      </div>
 
       {/* Stage tabs */}
       <div className="flex gap-2 flex-wrap mb-6">
@@ -116,7 +205,7 @@ export default function PredictionVersionPage() {
           <button
             key={stage}
             onClick={() => setActiveStage(stage)}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               activeStage === stage
                 ? "bg-green-600 text-white"
                 : "bg-gray-800 text-gray-300 hover:bg-gray-700"
@@ -128,68 +217,37 @@ export default function PredictionVersionPage() {
       </div>
 
       {/* Matches */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {visibleMatches.map((match) => {
           const pred = predictions[match.id] ?? { home: 0, away: 0 };
-          const isLocked = match.status !== "UPCOMING";
-          const isSaved = savedPredictions.has(match.id);
-
           return (
-            <div
+            <MatchCard
               key={match.id}
-              className={`bg-gray-900 border rounded-lg px-4 py-3 flex items-center justify-between gap-4 ${
-                isLocked ? "border-gray-700 opacity-60" : "border-gray-800"
-              }`}
-            >
-              <div className="flex-1">
-                <div className="font-medium text-white">
-                  {match.homeTeam} <span className="text-gray-400">vs</span> {match.awayTeam}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {new Date(match.scheduledAt).toLocaleDateString("he-IL")}
-                  {match.groupName && ` · בית ${match.groupName}`}
-                  {isLocked && <span className="text-orange-400 mr-2">🔒 נעול</span>}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={20}
-                  value={pred.home}
-                  onChange={(e) => handleChange(match.id, "home", e.target.value)}
-                  disabled={isLocked}
-                  className="w-12 text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white disabled:opacity-40"
-                />
-                <span className="text-gray-400">:</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={20}
-                  value={pred.away}
-                  onChange={(e) => handleChange(match.id, "away", e.target.value)}
-                  disabled={isLocked}
-                  className="w-12 text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white disabled:opacity-40"
-                />
-                {isSaved && <span className="text-green-400 text-xs">✓</span>}
-              </div>
-            </div>
+              match={match}
+              mode={versionLocked ? "view" : "predict"}
+              homeScore={pred.home}
+              awayScore={pred.away}
+              onHomeChange={(v) => handleChange(match.id, "home", v)}
+              onAwayChange={(v) => handleChange(match.id, "away", v)}
+              isSaved={savedPredictions.has(match.id)}
+            />
           );
         })}
       </div>
 
       {/* Save button */}
-      <div className="mt-6 flex items-center gap-4">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-medium px-6 py-2 rounded-lg"
-        >
-          {saving ? "שומר..." : "שמור"}
-        </button>
-        {message && <span className="text-sm text-gray-400">{message}</span>}
-      </div>
+      {!versionLocked && (
+        <div className="mt-6 flex items-center gap-4">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl transition-colors"
+          >
+            {saving ? "שומר..." : "שמור ניחושים"}
+          </button>
+          {message && <span className="text-sm text-gray-400">{message}</span>}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth-edge";
 import { isAdmin } from "@/lib/admin";
 import { NextResponse } from "next/server";
 

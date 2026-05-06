@@ -1,17 +1,16 @@
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canPredict } from "@/lib/predictions";
 
-const savePredictionsSchema = z.object({
-  predictions: z.array(
+const saveStandingsSchema = z.object({
+  standings: z.array(
     z.object({
-      matchId: z.string(),
-      homeScore: z.number().int().min(0),
-      awayScore: z.number().int().min(0),
-      additionalData: z.record(z.string(), z.unknown()).optional(),
+      groupName: z.string().length(1),
+      rank1: z.string().min(1),
+      rank2: z.string().min(1),
+      rank3: z.string().min(1),
+      rank4: z.string().min(1),
     })
   ),
 });
@@ -31,11 +30,10 @@ export async function GET(
     return NextResponse.json({ error: "Invalid version" }, { status: 400 });
   }
 
-  const predictions = await prisma.prediction.findMany({
+  const standings = await prisma.groupStandingPrediction.findMany({
     where: { userId: session.user.id, version: versionNum },
-    include: { match: { select: { status: true, homeTeam: true, awayTeam: true, stage: true } } },
   });
-  return NextResponse.json(predictions);
+  return NextResponse.json(standings);
 }
 
 export async function PUT(
@@ -54,7 +52,7 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const parsed = savePredictionsSchema.safeParse(body);
+  const parsed = saveStandingsSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -75,49 +73,14 @@ export async function PUT(
     }
   }
 
-  const results = [];
-  const errors = [];
-
-  for (const pred of parsed.data.predictions) {
-    const match = await prisma.match.findUnique({ where: { id: pred.matchId } });
-    if (!match) {
-      errors.push({ matchId: pred.matchId, error: "Match not found" });
-      continue;
-    }
-
-    if (!canPredict(match, false, versionNum)) {
-      errors.push({ matchId: pred.matchId, error: "Prediction not allowed (locked or finished)" });
-      continue;
-    }
-
-    const saved = await prisma.prediction.upsert({
-      where: {
-        userId_matchId_version: {
-          userId: session.user.id,
-          matchId: pred.matchId,
-          version: versionNum,
-        },
-      },
-      create: {
-        userId: session.user.id,
-        matchId: pred.matchId,
-        version: versionNum,
-        homeScore: pred.homeScore,
-        awayScore: pred.awayScore,
-        ...(pred.additionalData
-          ? { additionalData: pred.additionalData as Prisma.InputJsonValue }
-          : {}),
-      },
-      update: {
-        homeScore: pred.homeScore,
-        awayScore: pred.awayScore,
-        ...(pred.additionalData
-          ? { additionalData: pred.additionalData as Prisma.InputJsonValue }
-          : {}),
-      },
+  const userId = session.user.id;
+  for (const s of parsed.data.standings) {
+    await prisma.groupStandingPrediction.upsert({
+      where: { userId_version_groupName: { userId, version: versionNum, groupName: s.groupName } },
+      create: { userId, version: versionNum, groupName: s.groupName, rank1: s.rank1, rank2: s.rank2, rank3: s.rank3, rank4: s.rank4 },
+      update: { rank1: s.rank1, rank2: s.rank2, rank3: s.rank3, rank4: s.rank4 },
     });
-    results.push(saved);
   }
 
-  return NextResponse.json({ saved: results, errors });
+  return NextResponse.json({ ok: true });
 }

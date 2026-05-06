@@ -1,17 +1,17 @@
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canPredict } from "@/lib/predictions";
 
-const savePredictionsSchema = z.object({
-  predictions: z.array(
+const VALID_STAGES = ["QF", "SF", "FINAL", "WINNER"] as const;
+type KnockoutStage = typeof VALID_STAGES[number];
+
+const saveKnockoutSchema = z.object({
+  picks: z.array(
     z.object({
-      matchId: z.string(),
-      homeScore: z.number().int().min(0),
-      awayScore: z.number().int().min(0),
-      additionalData: z.record(z.string(), z.unknown()).optional(),
+      stage: z.enum(VALID_STAGES),
+      slot: z.number().int().min(1).max(8),
+      teamName: z.string().min(1),
     })
   ),
 });
@@ -31,11 +31,11 @@ export async function GET(
     return NextResponse.json({ error: "Invalid version" }, { status: 400 });
   }
 
-  const predictions = await prisma.prediction.findMany({
+  const picks = await prisma.knockoutPrediction.findMany({
     where: { userId: session.user.id, version: versionNum },
-    include: { match: { select: { status: true, homeTeam: true, awayTeam: true, stage: true } } },
+    orderBy: [{ stage: "asc" }, { slot: "asc" }],
   });
-  return NextResponse.json(predictions);
+  return NextResponse.json(picks);
 }
 
 export async function PUT(
@@ -54,7 +54,7 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const parsed = savePredictionsSchema.safeParse(body);
+  const parsed = saveKnockoutSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -75,49 +75,21 @@ export async function PUT(
     }
   }
 
-  const results = [];
-  const errors = [];
-
-  for (const pred of parsed.data.predictions) {
-    const match = await prisma.match.findUnique({ where: { id: pred.matchId } });
-    if (!match) {
-      errors.push({ matchId: pred.matchId, error: "Match not found" });
-      continue;
-    }
-
-    if (!canPredict(match, false, versionNum)) {
-      errors.push({ matchId: pred.matchId, error: "Prediction not allowed (locked or finished)" });
-      continue;
-    }
-
-    const saved = await prisma.prediction.upsert({
+  const userId = session.user.id;
+  for (const pick of parsed.data.picks) {
+    await prisma.knockoutPrediction.upsert({
       where: {
-        userId_matchId_version: {
-          userId: session.user.id,
-          matchId: pred.matchId,
+        userId_version_stage_slot: {
+          userId,
           version: versionNum,
+          stage: pick.stage,
+          slot: pick.slot,
         },
       },
-      create: {
-        userId: session.user.id,
-        matchId: pred.matchId,
-        version: versionNum,
-        homeScore: pred.homeScore,
-        awayScore: pred.awayScore,
-        ...(pred.additionalData
-          ? { additionalData: pred.additionalData as Prisma.InputJsonValue }
-          : {}),
-      },
-      update: {
-        homeScore: pred.homeScore,
-        awayScore: pred.awayScore,
-        ...(pred.additionalData
-          ? { additionalData: pred.additionalData as Prisma.InputJsonValue }
-          : {}),
-      },
+      create: { userId, version: versionNum, stage: pick.stage, slot: pick.slot, teamName: pick.teamName },
+      update: { teamName: pick.teamName },
     });
-    results.push(saved);
   }
 
-  return NextResponse.json({ saved: results, errors });
+  return NextResponse.json({ ok: true });
 }

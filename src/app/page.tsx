@@ -1,6 +1,7 @@
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export default function HomePage() {
   return (

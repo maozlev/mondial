@@ -25,3 +25,11 @@ body {
   border-color: rgb(74 222 128);
 }
 
+/* Force dark background on native select dropdowns */
+select {
+  color-scheme: dark;
+}
+select option {
+  background-color: #1f2937;
+  color: #f9fafb;
+}

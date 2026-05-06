@@ -1,0 +1,57 @@
+
+> mondial@0.1.0 build
+> next build
+
+Γצ▓ Next.js 16.2.4 (Turbopack)
+- Environments: .env.local, .env
+
+  Creating an optimized production build ...
+Γ£ף Compiled successfully in 2.6s
+  Running TypeScript ...
+  Finished TypeScript in 3.9s ...
+  Collecting page data using 19 workers ...
+  Generating static pages using 19 workers (0/18) ...
+  Generating static pages using 19 workers (4/18) 
+  Generating static pages using 19 workers (8/18) 
+  Generating static pages using 19 workers (13/18) 
+Γ£ף Generating static pages using 19 workers (18/18) in 328ms
+  Finalizing page optimization ...
+
+Route (app)
+Γפל ╞ע /
+Γפ£ Γקכ /_not-found
+Γפ£ ╞ע /admin
+Γפ£ Γקכ /admin/group-standings
+Γפ£ Γקכ /admin/knockout-results
+Γפ£ Γקכ /admin/matches
+Γפ£ Γקכ /admin/results
+Γפ£ Γקכ /admin/scoring
+Γפ£ Γקכ /admin/settings
+Γפ£ ╞ע /admin/users
+Γפ£ ╞ע /api/admin/group-standings
+Γפ£ ╞ע /api/admin/knockout-results
+Γפ£ ╞ע /api/admin/recalculate
+Γפ£ ╞ע /api/admin/scoring-rules
+Γפ£ ╞ע /api/admin/scoring-rules/[id]
+Γפ£ ╞ע /api/admin/settings
+Γפ£ ╞ע /api/admin/users
+Γפ£ ╞ע /api/auth/[...nextauth]
+Γפ£ ╞ע /api/leaderboard
+Γפ£ ╞ע /api/matches
+Γפ£ ╞ע /api/matches/[id]
+Γפ£ ╞ע /api/matches/import
+Γפ£ ╞ע /api/predictions/[version]
+Γפ£ ╞ע /api/predictions/[version]/knockout
+Γפ£ ╞ע /api/predictions/[version]/standings
+Γפ£ ╞ע /matches
+Γפ£ ╞ע /predictions
+Γפ£ ╞ע /predictions/[version]
+Γפ£ ╞ע /predictions/[version]/bracket
+Γפפ ╞ע /predictions/[version]/standings
+
+
+╞ע Proxy (Middleware)
+
+Γקכ  (Static)   prerendered as static content
+╞ע  (Dynamic)  server-rendered on demand
+

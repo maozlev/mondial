@@ -21,7 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { getFlagUrl } from "@/lib/flags";
-import { COUNTRY_CODES } from "@/lib/flags";
+import { computeGroupOrdersFromPredictions } from "@/lib/group-standings";
 
 // Groups A-L and their teams (from WC 2026 draw)
 const GROUPS: Record<string, string[]> = {
@@ -171,28 +171,64 @@ export default function StandingsPage() {
 
   // Load settings + existing predictions
   useEffect(() => {
-    fetch("/api/admin/settings")
-      .then((r) => r.json())
-      .then((s: Record<string, string>) => {
-        const globalLocked = s["predictions_locked"] === "true";
-        const dl = s[`version_${versionNum}_deadline`] ?? null;
-        const pastDeadline = dl ? new Date() > new Date(dl) : false;
-        setVersionLocked(globalLocked || pastDeadline);
-        setDeadline(dl);
-      });
+    type MatchRow = {
+      id: string;
+      homeTeam: string;
+      awayTeam: string;
+      stage: string;
+      groupName: string | null;
+    };
+    type PredRow = { matchId: string; homeScore: number; awayScore: number };
 
-    fetch(`/api/predictions/${versionNum}/standings`)
-      .then((r) => r.json())
-      .then((data: { groupName: string; rank1: string; rank2: string; rank3: string; rank4: string }[]) => {
-        if (!Array.isArray(data) || data.length === 0) return;
-        setGroupOrder((prev) => {
-          const next = { ...prev };
-          for (const row of data) {
-            next[row.groupName] = [row.rank1, row.rank2, row.rank3, row.rank4];
+    Promise.all([
+      fetch("/api/admin/settings").then((r) => r.json()),
+      fetch(`/api/predictions/${versionNum}/standings`).then((r) => r.json()),
+      fetch("/api/matches").then((r) => r.json()),
+      fetch(`/api/predictions/${versionNum}`).then((r) => r.json()),
+    ]).then(([s, standingData, matchesData, predsData]: [
+      Record<string, string>,
+      { groupName: string; rank1: string; rank2: string; rank3: string; rank4: string }[],
+      MatchRow[],
+      PredRow[]
+    ]) => {
+      const globalLocked = s["predictions_locked"] === "true";
+      const dl = s[`version_${versionNum}_deadline`] ?? null;
+      const pastDeadline = dl ? new Date() > new Date(dl) : false;
+      setVersionLocked(globalLocked || pastDeadline);
+      setDeadline(dl);
+
+      const predMap: Record<string, { home: number; away: number }> = {};
+      if (Array.isArray(predsData)) {
+        for (const p of predsData) {
+          predMap[p.matchId] = { home: p.homeScore, away: p.awayScore };
+        }
+      }
+
+      const computedOrder = Array.isArray(matchesData)
+        ? computeGroupOrdersFromPredictions(matchesData, predMap)
+        : {};
+
+      setGroupOrder((prev) => {
+        const next = { ...prev };
+
+        for (const [groupName, teams] of Object.entries(computedOrder)) {
+          if (teams.length >= 4) {
+            next[groupName] = [teams[0], teams[1], teams[2], teams[3]];
           }
-          return next;
-        });
+        }
+
+        if (Array.isArray(standingData)) {
+          for (const row of standingData) {
+            if (!computedOrder[row.groupName]) {
+              next[row.groupName] = [row.rank1, row.rank2, row.rank3, row.rank4];
+            }
+          }
+        }
+
+        return next;
       });
+    });
+
   }, [versionNum]);
 
   const handleReorder = useCallback(

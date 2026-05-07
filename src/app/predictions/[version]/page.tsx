@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { MatchStage } from "@prisma/client";
 import { MatchCard } from "@/components/MatchCard";
+import { computeGroupOrdersFromPredictions, toStandingRows } from "@/lib/group-standings";
 
 interface Match {
   id: string;
@@ -24,6 +25,9 @@ interface PredictionData {
   awayScore: number;
   match: { status: string; homeTeam: string; awayTeam: string; stage: string };
 }
+
+type GroupViewMode = "groups" | "dates";
+const GROUP_ORDER = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"] as const;
 
 const STAGE_LABELS: Record<string, string> = {
   GROUP: "שלב הבתים",
@@ -45,8 +49,11 @@ export default function PredictionVersionPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [activeStage, setActiveStage] = useState<string>("GROUP");
+  const [groupViewMode, setGroupViewMode] = useState<GroupViewMode>("groups");
   const [versionLocked, setVersionLocked] = useState(false);
   const [deadline, setDeadline] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const lastAutoSyncHash = useRef<string>("");
 
   useEffect(() => {
     // Check global settings + version deadline
@@ -76,11 +83,73 @@ export default function PredictionVersionPage() {
         }
         setPredictions(map);
         setSavedPredictions(savedSet);
+        setReady(true);
       });
   }, [versionNum]);
 
   const stages = [...new Set(matches.map((m) => m.stage))];
-  const visibleMatches = matches.filter((m) => m.stage === activeStage);
+  const visibleMatches = useMemo(
+    () => matches.filter((m) => m.stage === activeStage).sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt)),
+    [matches, activeStage]
+  );
+
+  const groupSections = useMemo(() => {
+    const sections = new Map<string, Match[]>();
+    for (const match of visibleMatches) {
+      const group = match.groupName ?? "?";
+      if (!sections.has(group)) sections.set(group, []);
+      sections.get(group)?.push(match);
+    }
+    return [...sections.entries()]
+      .sort(([a], [b]) => {
+        const aIdx = GROUP_ORDER.indexOf(a as (typeof GROUP_ORDER)[number]);
+        const bIdx = GROUP_ORDER.indexOf(b as (typeof GROUP_ORDER)[number]);
+        if (aIdx === -1 && bIdx === -1) return a.localeCompare(b, "he");
+        if (aIdx === -1) return 1;
+        if (bIdx === -1) return -1;
+        return aIdx - bIdx;
+      })
+      .map(([groupName, groupMatches]) => ({ groupName, matches: groupMatches }));
+  }, [visibleMatches]);
+
+  const dateSections = useMemo(() => {
+    const sections = new Map<string, Match[]>();
+    for (const match of visibleMatches) {
+      const key = new Date(match.scheduledAt).toLocaleDateString("he-IL", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        timeZone: "Asia/Jerusalem",
+      });
+      if (!sections.has(key)) sections.set(key, []);
+      sections.get(key)?.push(match);
+    }
+    return [...sections.entries()].map(([dateLabel, groupedMatches]) => ({ dateLabel, matches: groupedMatches }));
+  }, [visibleMatches]);
+
+  useEffect(() => {
+    if (!ready || versionLocked) return;
+    const groupOrders = computeGroupOrdersFromPredictions(matches, predictions);
+    const standings = toStandingRows(groupOrders);
+    if (standings.length === 0) return;
+
+    const sortedRows = [...standings].sort((a, b) => a.groupName.localeCompare(b.groupName, "en"));
+    const hash = JSON.stringify(sortedRows);
+    if (hash === lastAutoSyncHash.current) return;
+
+    const timeoutId = setTimeout(async () => {
+      const res = await fetch(`/api/predictions/${versionNum}/standings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ standings: sortedRows }),
+      });
+      if (res.ok) {
+        lastAutoSyncHash.current = hash;
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [matches, predictions, ready, versionLocked, versionNum]);
 
   const handleChange = (matchId: string, side: "home" | "away", value: string) => {
     const num = parseInt(value, 10);
@@ -216,23 +285,110 @@ export default function PredictionVersionPage() {
         ))}
       </div>
 
+      {/* Group-stage display toggle */}
+      {activeStage === "GROUP" && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-xs text-gray-400">תצוגה:</span>
+          <button
+            type="button"
+            onClick={() => setGroupViewMode("groups")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              groupViewMode === "groups"
+                ? "bg-green-600 text-white"
+                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+            }`}
+          >
+            לפי בתים
+          </button>
+          <button
+            type="button"
+            onClick={() => setGroupViewMode("dates")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              groupViewMode === "dates"
+                ? "bg-green-600 text-white"
+                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+            }`}
+          >
+            לפי תאריכים
+          </button>
+        </div>
+      )}
+
       {/* Matches */}
       <div className="space-y-2">
-        {visibleMatches.map((match) => {
-          const pred = predictions[match.id] ?? { home: 0, away: 0 };
-          return (
-            <MatchCard
-              key={match.id}
-              match={match}
-              mode={versionLocked ? "view" : "predict"}
-              homeScore={pred.home}
-              awayScore={pred.away}
-              onHomeChange={(v) => handleChange(match.id, "home", v)}
-              onAwayChange={(v) => handleChange(match.id, "away", v)}
-              isSaved={savedPredictions.has(match.id)}
-            />
-          );
-        })}
+        {activeStage !== "GROUP" &&
+          visibleMatches.map((match) => {
+            const pred = predictions[match.id] ?? { home: 0, away: 0 };
+            return (
+              <MatchCard
+                key={match.id}
+                match={match}
+                mode={versionLocked ? "view" : "predict"}
+                homeScore={pred.home}
+                awayScore={pred.away}
+                onHomeChange={(v) => handleChange(match.id, "home", v)}
+                onAwayChange={(v) => handleChange(match.id, "away", v)}
+                isSaved={savedPredictions.has(match.id)}
+              />
+            );
+          })}
+
+        {activeStage === "GROUP" && groupViewMode === "groups" &&
+          groupSections.map((section) => (
+            <section key={section.groupName} className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center font-bold text-white text-xs">
+                  {section.groupName}
+                </div>
+                <h3 className="text-sm font-semibold text-white">בית {section.groupName}</h3>
+                <div className="flex-1 h-px bg-gray-800" />
+              </div>
+              <div className="space-y-2">
+                {section.matches.map((match) => {
+                  const pred = predictions[match.id] ?? { home: 0, away: 0 };
+                  return (
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      mode={versionLocked ? "view" : "predict"}
+                      homeScore={pred.home}
+                      awayScore={pred.away}
+                      onHomeChange={(v) => handleChange(match.id, "home", v)}
+                      onAwayChange={(v) => handleChange(match.id, "away", v)}
+                      isSaved={savedPredictions.has(match.id)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+
+        {activeStage === "GROUP" && groupViewMode === "dates" &&
+          dateSections.map((section) => (
+            <section key={section.dateLabel} className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-blue-300">{section.dateLabel}</h3>
+                <div className="flex-1 h-px bg-gray-800" />
+              </div>
+              <div className="space-y-2">
+                {section.matches.map((match) => {
+                  const pred = predictions[match.id] ?? { home: 0, away: 0 };
+                  return (
+                    <MatchCard
+                      key={match.id}
+                      match={match}
+                      mode={versionLocked ? "view" : "predict"}
+                      homeScore={pred.home}
+                      awayScore={pred.away}
+                      onHomeChange={(v) => handleChange(match.id, "home", v)}
+                      onAwayChange={(v) => handleChange(match.id, "away", v)}
+                      isSaved={savedPredictions.has(match.id)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          ))}
       </div>
 
       {/* Save button */}

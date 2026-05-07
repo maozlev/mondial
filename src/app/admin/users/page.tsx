@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { GenerateCodeButton } from "./GenerateCodeButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,6 +65,8 @@ export default async function AdminUsersPage() {
             <tr className="border-b border-gray-800 text-gray-400 text-right">
               <th className="py-3 px-3 font-medium">#</th>
               <th className="py-3 px-3 font-medium">שם / אימייל</th>
+              <th className="py-3 px-3 font-medium">סטטוס</th>
+              <th className="py-3 px-3 font-medium">קוד גישה</th>
               <th className="py-3 px-3 font-medium">גרסה 1</th>
               <th className="py-3 px-3 font-medium">גרסה 2</th>
               <th className="py-3 px-3 font-medium">גרסה 3</th>
@@ -81,6 +84,22 @@ export default async function AdminUsersPage() {
                 <td className="py-3 px-3">
                   <div className="font-medium text-white">{u.name ?? "—"}</div>
                   <div className="text-xs text-gray-500">{u.email}</div>
+                </td>
+                <td className="py-3 px-3">
+                  {u.approvedAt ? (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-900/50 text-green-400">
+                      ✓ מאושר
+                    </span>
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-yellow-900/40 text-yellow-400">
+                      ⏳ ממתין
+                    </span>
+                  )}
+                </td>
+                <td className="py-3 px-3">
+                  <div className="flex items-center gap-2">
+                    <GenerateCodeButton userId={u.id} hasCode={!!u.inviteCode} />
+                  </div>
                 </td>
                 <td className="py-3 px-3">
                   <VersionCell count={u.vs[1].count} points={u.vs[1].points} total={totalMatches} />
@@ -110,7 +129,7 @@ export default async function AdminUsersPage() {
             ))}
             {stats.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-gray-500">
+                <td colSpan={9} className="py-8 text-center text-gray-500">
                   אין משתמשים רשומים עדיין
                 </td>
               </tr>

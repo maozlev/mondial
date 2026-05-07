@@ -37,14 +37,13 @@ function emptyPicks(): Picks {
   return { qf: Array(8).fill(""), sf: Array(4).fill(""), final: Array(2).fill(""), winner: "" };
 }
 
-function getCandidates(qfIdx: number, standings: StandingPred[], allThirds: string[]): string[] {
+function getCandidates(qfIdx: number, standings: StandingPred[]): string[] {
   const info = QF_INFO[qfIdx];
   const teams: string[] = [];
   for (const s of standings) {
     if ((info.rank1Groups as readonly string[]).includes(s.groupName) && s.rank1) teams.push(s.rank1);
     if ((info.rank2Groups as readonly string[]).includes(s.groupName) && s.rank2) teams.push(s.rank2);
   }
-  for (const t of allThirds) { if (!teams.includes(t)) teams.push(t); }
   return teams.filter(Boolean);
 }
 
@@ -158,8 +157,7 @@ export default function BracketPage() {
       });
   }, [versionNum]);
 
-  const allThirds = standings.map((s) => s.rank3).filter(Boolean);
-  const qfCands = (idx: number) => getCandidates(idx, standings, allThirds);
+  const qfCands = (idx: number) => getCandidates(idx, standings);
 
   function setQFTeam(matchIdx: number, side: 0 | 1, team: string) {
     setPicks((prev) => {
@@ -267,8 +265,9 @@ export default function BracketPage() {
       )}
 
       {/* ─── 4-2-1-2-4 Bracket ──────────────────────────────────────────────── */}
-      <div className="overflow-x-auto -mx-3 px-3 pb-4">
-        <div className="flex gap-2 min-w-[760px] items-stretch" dir="ltr">
+      <p className="text-xs text-gray-600 mb-2 sm:hidden text-center">← גלול לראות הכל →</p>
+      <div className="overflow-x-auto -mx-3 px-3 pb-4 snap-x snap-mandatory">
+        <div className="flex gap-2 min-w-[700px] items-stretch" dir="ltr">
 
           {/* Left QF column */}
           <div className="flex flex-col gap-3 flex-1 min-w-[170px]">

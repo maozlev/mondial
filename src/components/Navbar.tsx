@@ -50,12 +50,20 @@ export function Navbar() {
             </button>
           </>
         ) : (
-          <button
-            onClick={() => signIn("google")}
-            className="text-xs bg-green-600 hover:bg-green-500 px-2.5 py-1 rounded font-medium whitespace-nowrap"
-          >
-            כניסה
-          </button>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/register"
+              className="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded whitespace-nowrap"
+            >
+              הרשמה
+            </Link>
+            <button
+              onClick={() => signIn("google")}
+              className="text-xs bg-green-600 hover:bg-green-500 px-2.5 py-1 rounded font-medium whitespace-nowrap"
+            >
+              כניסה
+            </button>
+          </div>
         )}
       </div>
     </nav>

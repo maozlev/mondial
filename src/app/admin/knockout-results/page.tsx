@@ -7,9 +7,10 @@ import { COUNTRY_CODES } from "@/lib/flags";
 
 const ALL_TEAMS = Object.keys(COUNTRY_CODES);
 
-type Stage = "QF" | "SF" | "FINAL" | "WINNER";
+type Stage = "R16" | "QF" | "SF" | "FINAL" | "WINNER";
 
 const STAGE_CONFIG: { stage: Stage; label: string; slots: number }[] = [
+  { stage: "R16", label: "שמינית גמר", slots: 16 },
   { stage: "QF", label: "רבע גמר", slots: 8 },
   { stage: "SF", label: "חצי גמר", slots: 4 },
   { stage: "FINAL", label: "גמר", slots: 2 },
@@ -20,6 +21,7 @@ type Results = Record<Stage, string[]>;
 
 function emptyResults(): Results {
   return {
+    R16: Array(16).fill(""),
     QF: Array(8).fill(""),
     SF: Array(4).fill(""),
     FINAL: Array(2).fill(""),

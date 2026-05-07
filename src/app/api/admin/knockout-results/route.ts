@@ -4,11 +4,11 @@ import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 
-const VALID_STAGES = ["QF", "SF", "FINAL", "WINNER"] as const;
+const VALID_STAGES = ["R16", "QF", "SF", "FINAL", "WINNER"] as const;
 
 const upsertKnockoutSchema = z.object({
   stage: z.enum(VALID_STAGES),
-  slot: z.number().int().min(1).max(8),
+  slot: z.number().int().min(1).max(16),
   teamName: z.string().min(1),
 });
 
@@ -55,7 +55,7 @@ export async function DELETE(req: NextRequest) {
   const body = await req.json();
   const parsed = z.object({
     stage: z.enum(VALID_STAGES),
-    slot: z.number().int().min(1).max(8),
+    slot: z.number().int().min(1).max(16),
   }).safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

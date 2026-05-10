@@ -551,6 +551,9 @@ export default function BracketPage() {
           עמדות קבוצות
         </Link>
         <span className="px-3 py-2 text-sm text-white font-semibold whitespace-nowrap border-b-2 border-yellow-400">ברקט</span>
+        <Link href={`/predictions/${versionNum}/instructions`} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent">
+          הוראות
+        </Link>
       </div>
 
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">

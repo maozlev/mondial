@@ -287,6 +287,12 @@ export default function StandingsPage() {
         >
           ברקט
         </Link>
+        <Link
+          href={`/predictions/${versionNum}/instructions`}
+          className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap border-b-2 border-transparent"
+        >
+          הוראות
+        </Link>
       </div>
 
       <h1 className="text-xl font-bold text-white mb-1">

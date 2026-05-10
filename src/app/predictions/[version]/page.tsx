@@ -109,8 +109,9 @@ function InstructionsContent({ matchRules, maxVersions }: { matchRules: ScoringR
       </InstrSection>
       <InstrSection title="📊 עמדות קבוצות">
         <p className="text-gray-300 text-sm leading-relaxed">
-          ב<strong className="text-white">טאב "עמדות קבוצות"</strong> מסדרים את 4 הנבחרות בכל בית לפי הסדר הצפוי (1-4).
-          ניתן לגרור ולשחרר. טיפ: לחץ "חשב מניחושי תוצאות" לסדר אוטומטי.
+          ב<strong className="text-white">טאב "עמדות קבוצות"</strong> מוצג הסדר הצפוי של הנבחרות בכל בית —
+          מחושב אוטומטית מניחושי תוצאות המשחקים שלך.
+          ניתן לגרור ולשחרר כדי לשנות ידנית.
         </p>
       </InstrSection>
       <InstrSection title="🏅 ניקוד — עמדות קבוצות">

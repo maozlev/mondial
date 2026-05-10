@@ -89,7 +89,7 @@ export default function InstructionsPage() {
                 {" "}
               </>
             )}
-            בכל גרסה ניתן לנחש שלושה דברים: תוצאות משחקי שלב הבתים, עמדות הקבוצות בכל בית, וברקט הנוקאאוט המלא.
+            בכל גרסה ניתן לנחש שני דברים: תוצאות משחקי שלב הבתים (מהן נגזרות עמדות הקבוצות אוטומטית), וברקט הנוקאאוט המלא.
           </p>
           <p className="text-gray-300 text-sm leading-relaxed">
             לכל גרסה יש <strong className="text-white">דד-ליין</strong> — לאחריו לא ניתן לשנות ניחושים בגרסה זו.
@@ -121,12 +121,11 @@ export default function InstructionsPage() {
 
         <Section title="📊 עמדות קבוצות">
           <p className="text-gray-300 text-sm leading-relaxed">
-            ב<strong className="text-white">טאב "עמדות קבוצות"</strong> מסדרים את 4 הנבחרות בכל בית לפי הסדר הצפוי שלהן (1-4).
-            ניתן לגרור ולשחרר. הסדר נשמר עצמאית מניחוש התוצאות.
+            ב<strong className="text-white">טאב "עמדות קבוצות"</strong> מוצג הסדר הצפוי של הנבחרות בכל בית —
+            מחושב אוטומטית מניחושי תוצאות המשחקים שלך.
+            ניתן לגרור ולשחרר כדי לשנות ידנית אם תרצו.
           </p>
-          <p className="text-gray-500 text-xs">
-            טיפ: לחץ "חשב מניחושי תוצאות" לסדר אוטומטי לפי הניחושים שלך.
-          </p>
+          <p className="text-gray-500 text-xs">לחץ "שמור עמדות" לאחר שינוי ידני.</p>
         </Section>
 
         <Section title="🏅 ניקוד — עמדות קבוצות">

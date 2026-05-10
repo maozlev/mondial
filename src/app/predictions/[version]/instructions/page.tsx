@@ -34,6 +34,13 @@ function Row({ label, value, sub }: { label: string; value: string | number; sub
   );
 }
 
+interface InitData {
+  scoringRules: ScoringRule[];
+  maxVersions: number;
+}
+
+const CACHE_FRESH_MS = 30_000;
+
 export default function InstructionsPage() {
   const { version } = useParams<{ version: string }>();
   const versionNum = parseInt(version, 10);
@@ -41,15 +48,33 @@ export default function InstructionsPage() {
   const [maxVersions, setMaxVersions] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/scoring-rules")
+    const CACHE_KEY = `init_v${versionNum}`;
+
+    function applyData(data: InitData) {
+      if (Array.isArray(data.scoringRules)) setMatchRules(data.scoringRules);
+      if (typeof data.maxVersions === "number") setMaxVersions(data.maxVersions);
+    }
+
+    let isFresh = false;
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { data, ts } = JSON.parse(raw) as { data: InitData; ts: number };
+        applyData(data);
+        isFresh = Date.now() - ts < CACHE_FRESH_MS;
+      }
+    } catch {}
+
+    if (isFresh) return;
+
+    fetch(`/api/predictions/${versionNum}/init`)
       .then((r) => r.json())
-      .then((data: ScoringRule[]) => Array.isArray(data) && setMatchRules(data))
+      .then((data: InitData) => {
+        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch {}
+        applyData(data);
+      })
       .catch(() => {});
-    fetch("/api/user/me")
-      .then((r) => r.json())
-      .then((data: { maxVersions?: number }) => typeof data.maxVersions === "number" && setMaxVersions(data.maxVersions))
-      .catch(() => {});
-  }, []);
+  }, [versionNum]);
 
   const activeRules = matchRules.filter((r) => r.isActive).sort((a, b) => a.order - b.order);
   const vCount = maxVersions ?? 1;

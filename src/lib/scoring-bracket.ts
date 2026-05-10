@@ -92,6 +92,7 @@ export function scoreGroupStanding(
 // ─── Knockout scoring ─────────────────────────────────────────────────────────
 
 const KNOCKOUT_POINTS: Record<string, number> = {
+  R32: 2,
   R16: 3,
   QF: 5,
   SF: 10,

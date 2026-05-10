@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const VALID_STAGES = ["R16", "QF", "SF", "FINAL", "WINNER"] as const;
+const VALID_STAGES = ["R32", "R16", "QF", "SF", "FINAL", "WINNER"] as const;
 type KnockoutStage = typeof VALID_STAGES[number];
 
 const saveKnockoutSchema = z.object({
   picks: z.array(
     z.object({
       stage: z.enum(VALID_STAGES),
-      slot: z.number().int().min(1).max(16),
+      slot: z.number().int().min(1).max(32),
       teamName: z.string().min(1),
     })
   ),

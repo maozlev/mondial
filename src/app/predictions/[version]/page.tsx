@@ -71,14 +71,17 @@ interface ScoringRule {
   order: number;
 }
 
-function InstructionsContent({ matchRules }: { matchRules: ScoringRule[] }) {
+function InstructionsContent({ matchRules, maxVersions }: { matchRules: ScoringRule[]; maxVersions: number }) {
   const activeRules = matchRules.filter((r) => r.isActive).sort((a, b) => a.order - b.order);
   return (
     <div className="space-y-5 mt-2">
       <InstrSection title="📋 סקירה כללית">
         <p className="text-gray-300 text-sm leading-relaxed">
-          יש לכם <strong className="text-white">3 גרסאות</strong> לניחושים — כל גרסה מתחרה בטבלת דירוג נפרדת.
-          בכל גרסה ניתן לנחש תוצאות משחקי שלב הבתים, עמדות הקבוצות בכל בית, וברקט הנוקאאוט המלא.
+          יש לכם <strong className="text-white">{maxVersions} {maxVersions === 1 ? "גרסא" : "גרסאות"}</strong> לניחושים —{" "}
+          {maxVersions === 1
+            ? "גרסה זו היא ההזדמנות שלכם."
+            : "כל גרסה מתחרה בטבלת דירוג נפרדת."}
+          {" "}בכל גרסה ניתן לנחש תוצאות משחקי שלב הבתים, עמדות הקבוצות בכל בית, וברקט הנוקאאוט המלא.
         </p>
         <p className="text-gray-300 text-sm leading-relaxed">
           לכל גרסה יש <strong className="text-white">דד-ליין</strong> — לאחריו לא ניתן לשנות ניחושים.
@@ -134,9 +137,9 @@ function InstructionsContent({ matchRules }: { matchRules: ScoringRule[] }) {
       </InstrSection>
       <InstrSection title="🔄 גרסאות">
         <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
-          <li>3 גרסאות עצמאיות — כל גרסה מתחרה בנפרד</li>
+          {maxVersions > 1 && <li>{maxVersions} גרסאות עצמאיות — כל גרסה מתחרה בנפרד</li>}
           <li>לכל גרסה דד-ליין משלה</li>
-          <li>ניחושים בגרסה אחת לא משפיעים על האחרות</li>
+          {maxVersions > 1 && <li>ניחושים בגרסה אחת לא משפיעים על האחרות</li>}
         </ul>
       </InstrSection>
     </div>
@@ -160,6 +163,7 @@ export default function PredictionVersionPage() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
+  const [maxVersions, setMaxVersions] = useState(1);
   const lastAutoSyncHash = useRef<string>("");
 
   useEffect(() => {
@@ -182,6 +186,11 @@ export default function PredictionVersionPage() {
     fetch("/api/admin/scoring-rules")
       .then((r) => r.json())
       .then((data: ScoringRule[]) => Array.isArray(data) && setScoringRules(data))
+      .catch(() => {});
+
+    fetch("/api/user/me")
+      .then((r) => r.json())
+      .then((data: { maxVersions?: number }) => typeof data.maxVersions === "number" && setMaxVersions(data.maxVersions))
       .catch(() => {});
 
     fetch(`/api/predictions/${versionNum}`)
@@ -458,7 +467,7 @@ export default function PredictionVersionPage() {
       </div>
 
       {showInstructions ? (
-        <InstructionsContent matchRules={scoringRules} />
+        <InstructionsContent matchRules={scoringRules} maxVersions={maxVersions} />
       ) : (
         <>
           {/* Stage tabs */}

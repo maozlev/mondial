@@ -38,15 +38,21 @@ export default function InstructionsPage() {
   const { version } = useParams<{ version: string }>();
   const versionNum = parseInt(version, 10);
   const [matchRules, setMatchRules] = useState<ScoringRule[]>([]);
+  const [maxVersions, setMaxVersions] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/scoring-rules")
       .then((r) => r.json())
       .then((data: ScoringRule[]) => Array.isArray(data) && setMatchRules(data))
       .catch(() => {});
+    fetch("/api/user/me")
+      .then((r) => r.json())
+      .then((data: { maxVersions?: number }) => typeof data.maxVersions === "number" && setMaxVersions(data.maxVersions))
+      .catch(() => {});
   }, []);
 
   const activeRules = matchRules.filter((r) => r.isActive).sort((a, b) => a.order - b.order);
+  const vCount = maxVersions ?? 1;
 
   return (
     <div className="max-w-2xl mx-auto px-3 py-6" dir="rtl">
@@ -74,7 +80,15 @@ export default function InstructionsPage() {
 
         <Section title="📋 סקירה כללית">
           <p className="text-gray-300 text-sm leading-relaxed">
-            יש לכם <strong className="text-white">3 גרסאות</strong> לניחושים — כל גרסה היא הזדמנות נפרדת שתתחרה בטבלת הדירוג שלה.
+            {maxVersions !== null && (
+              <>
+                יש לכם <strong className="text-white">{vCount} {vCount === 1 ? "גרסא" : "גרסאות"}</strong> לניחושים —{" "}
+                {vCount === 1
+                  ? "גרסה זו היא ההזדמנות שלכם."
+                  : "כל גרסה היא הזדמנות נפרדת שתתחרה בטבלת הדירוג שלה."}
+                {" "}
+              </>
+            )}
             בכל גרסה ניתן לנחש שלושה דברים: תוצאות משחקי שלב הבתים, עמדות הקבוצות בכל בית, וברקט הנוקאאוט המלא.
           </p>
           <p className="text-gray-300 text-sm leading-relaxed">
@@ -152,9 +166,9 @@ export default function InstructionsPage() {
 
         <Section title="🔄 גרסאות">
           <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
-            <li>3 גרסאות עצמאיות — כל גרסה מתחרה בנפרד</li>
+            {vCount > 1 && <li>{vCount} גרסאות עצמאיות — כל גרסה מתחרה בנפרד</li>}
             <li>לכל גרסה דד-ליין משלה</li>
-            <li>ניחושים בגרסה אחת לא משפיעים על גרסאות אחרות</li>
+            {vCount > 1 && <li>ניחושים בגרסה אחת לא משפיעים על גרסאות אחרות</li>}
           </ul>
         </Section>
 

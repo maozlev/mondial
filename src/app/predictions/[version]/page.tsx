@@ -164,6 +164,7 @@ export default function PredictionVersionPage() {
   const [resetting, setResetting] = useState(false);
   const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
   const [maxVersions, setMaxVersions] = useState(1);
+  const [knockoutStageCounts, setKnockoutStageCounts] = useState<Record<string, number>>({});
   const lastAutoSyncHash = useRef<string>("");
 
   useEffect(() => {
@@ -191,6 +192,18 @@ export default function PredictionVersionPage() {
     fetch("/api/user/me")
       .then((r) => r.json())
       .then((data: { maxVersions?: number }) => typeof data.maxVersions === "number" && setMaxVersions(data.maxVersions))
+      .catch(() => {});
+
+    fetch(`/api/predictions/${versionNum}/knockout`)
+      .then((r) => r.json())
+      .then((data: { stage: string }[]) => {
+        if (!Array.isArray(data)) return;
+        const counts: Record<string, number> = {};
+        for (const pick of data) {
+          counts[pick.stage] = (counts[pick.stage] ?? 0) + 1;
+        }
+        setKnockoutStageCounts(counts);
+      })
       .catch(() => {});
 
     fetch(`/api/predictions/${versionNum}`)
@@ -351,6 +364,18 @@ export default function PredictionVersionPage() {
     });
     if (stage === "GROUP") lastAutoSyncHash.current = "";
     setResetting(false);
+    // Clear knockoutStageCounts for affected knockout stages
+    if (stage === "GROUP") {
+      setKnockoutStageCounts({});
+    } else if ((KNOCKOUT_STAGE_ORDER as readonly string[]).includes(stage)) {
+      const fromIdx = KNOCKOUT_STAGE_ORDER.indexOf(stage as typeof KNOCKOUT_STAGE_ORDER[number]);
+      const cleared = KNOCKOUT_STAGE_ORDER.slice(fromIdx);
+      setKnockoutStageCounts((prev) => {
+        const next = { ...prev };
+        for (const s of cleared) delete next[s];
+        return next;
+      });
+    }
     setMessage(`${label} אופסה`);
   };
 
@@ -365,6 +390,7 @@ export default function PredictionVersionPage() {
     ]);
     setPredictions({});
     setSavedPredictions(new Set());
+    setKnockoutStageCounts({});
     lastAutoSyncHash.current = "";
     setResetting(false);
     setMessage("כל הניחושים אופסו");
@@ -474,6 +500,8 @@ export default function PredictionVersionPage() {
           <div className="flex gap-2 flex-wrap mb-6">
             {stages.map((stage) => {
               const stageSavedCount = (stageMatchIds[stage] ?? []).filter((id) => savedPredictions.has(id)).length;
+              const hasKnockoutPicks = (knockoutStageCounts[stage] ?? 0) > 0;
+              const hasAnythingToReset = stageSavedCount > 0 || hasKnockoutPicks;
               return (
                 <div key={stage} className="flex items-center gap-0.5">
                   <button
@@ -489,7 +517,7 @@ export default function PredictionVersionPage() {
                       <span className="mr-1.5 text-xs opacity-70">({stageSavedCount})</span>
                     )}
                   </button>
-                  {!versionLocked && stageSavedCount > 0 && (
+                  {!versionLocked && hasAnythingToReset && (
                     <button
                       onClick={() => handleResetStage(stage)}
                       disabled={resetting}

@@ -16,8 +16,8 @@ export default async function PredictionsPage() {
     include: { scores: true },
   });
 
-  const versionTotals: Record<number, number> = { 1: 0, 2: 0, 3: 0 };
-  const versionCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0 };
+  const versionTotals: Record<number, number> = {};
+  const versionCounts: Record<number, number> = {};
 
   for (const pred of predictions) {
     const pts = pred.scores.reduce((s: number, sc: { points: number }) => s + sc.points, 0);
@@ -25,17 +25,19 @@ export default async function PredictionsPage() {
     versionCounts[pred.version] = (versionCounts[pred.version] ?? 0) + 1;
   }
 
-  const [totalMatches, settings] = await Promise.all([
+  const [totalMatches, settings, currentUser] = await Promise.all([
     prisma.match.count(),
     prisma.appSetting.findMany(),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { maxVersions: true } }),
   ]);
 
   const settingsMap = Object.fromEntries(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
   const globalLocked = settingsMap["predictions_locked"] === "true";
+  const maxVersions = currentUser?.maxVersions ?? 1;
 
   const now = new Date();
 
-  const versionInfo = [1, 2, 3].map((v) => {
+  const versionInfo = Array.from({ length: maxVersions }, (_, i) => i + 1).map((v) => {
     const deadlineStr = settingsMap[`version_${v}_deadline`] ?? null;
     const deadline = deadlineStr ? new Date(deadlineStr) : null;
     const isPast = deadline ? now > deadline : false;
@@ -50,7 +52,7 @@ export default async function PredictionsPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-green-400 mb-2">הניחושים שלי</h1>
       <p className="text-gray-400 text-sm mb-6">
-        3 ניסיונות ניחוש לכל {totalMatches} משחקי המונדיאל
+        {maxVersions} {maxVersions === 1 ? "ניסיון ניחוש" : "ניסיונות ניחוש"} ל-{totalMatches} משחקי המונדיאל
       </p>
 
       {globalLocked && (

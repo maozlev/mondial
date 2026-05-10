@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { GenerateCodeButton } from "./GenerateCodeButton";
 import { DeleteUserButton } from "./DeleteUserButton";
+import { SetVersionsButton } from "./SetVersionsButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -74,6 +75,7 @@ export default async function AdminUsersPage() {
               <th className="py-3 px-3 font-medium">גרסה 3</th>
               <th className="py-3 px-3 font-medium">מקסימום</th>
               <th className="py-3 px-3 font-medium">תפקיד</th>
+              <th className="py-3 px-3 font-medium">גרסאות</th>
               <th className="py-3 px-3 font-medium"></th>
             </tr>
           </thead>
@@ -129,6 +131,9 @@ export default async function AdminUsersPage() {
                   </span>
                 </td>
                 <td className="py-3 px-3">
+                  <SetVersionsButton userId={u.id} current={u.maxVersions} />
+                </td>
+                <td className="py-3 px-3">
                   <DeleteUserButton
                     userId={u.id}
                     userName={u.name ?? u.email ?? ""}
@@ -139,7 +144,7 @@ export default async function AdminUsersPage() {
             ))}
             {stats.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-gray-500">
+                <td colSpan={11} className="py-8 text-center text-gray-500">
                   אין משתמשים רשומים עדיין
                 </td>
               </tr>

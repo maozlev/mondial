@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canPredict } from "@/lib/predictions";
+import { isAdmin } from "@/lib/admin";
+
+async function getUserMaxVersions(userId: string): Promise<number> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { maxVersions: true } });
+  return u?.maxVersions ?? 1;
+}
 
 const savePredictionsSchema = z.object({
   predictions: z.array(
@@ -30,6 +36,9 @@ export async function GET(
   if (![1, 2, 3].includes(versionNum)) {
     return NextResponse.json({ error: "Invalid version" }, { status: 400 });
   }
+  if (!isAdmin(session.user.email) && versionNum > await getUserMaxVersions(session.user.id)) {
+    return NextResponse.json({ error: "אין גישה לגרסה זו" }, { status: 403 });
+  }
 
   const predictions = await prisma.prediction.findMany({
     where: { userId: session.user.id, version: versionNum },
@@ -51,6 +60,9 @@ export async function PUT(
   const versionNum = parseInt(version, 10);
   if (![1, 2, 3].includes(versionNum)) {
     return NextResponse.json({ error: "Invalid version" }, { status: 400 });
+  }
+  if (!isAdmin(session.user.email) && versionNum > await getUserMaxVersions(session.user.id)) {
+    return NextResponse.json({ error: "אין גישה לגרסה זו" }, { status: 403 });
   }
 
   const body = await req.json();
@@ -135,6 +147,9 @@ export async function DELETE(
   const versionNum = parseInt(version, 10);
   if (![1, 2, 3].includes(versionNum)) {
     return NextResponse.json({ error: "Invalid version" }, { status: 400 });
+  }
+  if (!isAdmin(session.user.email) && versionNum > await getUserMaxVersions(session.user.id)) {
+    return NextResponse.json({ error: "אין גישה לגרסה זו" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);

@@ -60,6 +60,7 @@ model User {
   passwordHash  String?
   inviteCode    String?   @unique
   approvedAt    DateTime?
+  maxVersions   Int       @default(1)
   createdAt     DateTime  @default(now())
 
   accounts                  Account[]

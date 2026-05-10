@@ -93,3 +93,39 @@ export async function PUT(
 
   return NextResponse.json({ ok: true });
 }
+
+const KNOCKOUT_STAGE_ORDER: KnockoutStage[] = ["R32", "R16", "QF", "SF", "FINAL", "WINNER"];
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ version: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { version } = await params;
+  const versionNum = parseInt(version, 10);
+  if (![1, 2, 3].includes(versionNum)) {
+    return NextResponse.json({ error: "Invalid version" }, { status: 400 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const fromStage = searchParams.get("fromStage") as KnockoutStage | null;
+
+  const stagesToDelete: KnockoutStage[] =
+    fromStage && KNOCKOUT_STAGE_ORDER.includes(fromStage)
+      ? KNOCKOUT_STAGE_ORDER.slice(KNOCKOUT_STAGE_ORDER.indexOf(fromStage))
+      : [...KNOCKOUT_STAGE_ORDER];
+
+  const deleted = await prisma.knockoutPrediction.deleteMany({
+    where: {
+      userId: session.user.id,
+      version: versionNum,
+      stage: { in: stagesToDelete },
+    },
+  });
+
+  return NextResponse.json({ deleted: deleted.count });
+}

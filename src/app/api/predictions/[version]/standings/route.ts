@@ -84,3 +84,25 @@ export async function PUT(
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ version: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { version } = await params;
+  const versionNum = parseInt(version, 10);
+  if (![1, 2, 3].includes(versionNum)) {
+    return NextResponse.json({ error: "Invalid version" }, { status: 400 });
+  }
+
+  const deleted = await prisma.groupStandingPrediction.deleteMany({
+    where: { userId: session.user.id, version: versionNum },
+  });
+
+  return NextResponse.json({ deleted: deleted.count });
+}

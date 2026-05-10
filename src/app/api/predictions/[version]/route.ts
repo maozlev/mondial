@@ -121,3 +121,41 @@ export async function PUT(
 
   return NextResponse.json({ saved: results, errors });
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ version: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { version } = await params;
+  const versionNum = parseInt(version, 10);
+  if (![1, 2, 3].includes(versionNum)) {
+    return NextResponse.json({ error: "Invalid version" }, { status: 400 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const stage = searchParams.get("stage");
+
+  let matchIds: string[] | undefined;
+  if (stage) {
+    const stageMatches = await prisma.match.findMany({
+      where: { stage: stage as import("@prisma/client").MatchStage },
+      select: { id: true },
+    });
+    matchIds = stageMatches.map((m) => m.id);
+  }
+
+  const deleted = await prisma.prediction.deleteMany({
+    where: {
+      userId: session.user.id,
+      version: versionNum,
+      ...(matchIds !== undefined ? { matchId: { in: matchIds } } : {}),
+    },
+  });
+
+  return NextResponse.json({ deleted: deleted.count });
+}

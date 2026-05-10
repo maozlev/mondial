@@ -357,8 +357,8 @@ export default function BracketPage() {
       if (Array.isArray(knockoutData) && knockoutData.length > 0) {
         const next = emptyPicks();
         for (const row of knockoutData) {
-          if (row.stage === "R32" && row.slot >= 1 && row.slot <= 32)      next.r32[row.slot - 1] = row.teamName;
-          else if (row.stage === "R16" && row.slot >= 1 && row.slot <= 16) next.r16[row.slot - 1] = row.teamName;
+          // R32 slots are always auto-filled from standings — never loaded from DB
+          if (row.stage === "R16" && row.slot >= 1 && row.slot <= 16) next.r16[row.slot - 1] = row.teamName;
           else if (row.stage === "QF"  && row.slot >= 1 && row.slot <= 8)  next.qf[row.slot - 1] = row.teamName;
           else if (row.stage === "SF"  && row.slot >= 1 && row.slot <= 4)  next.sf[row.slot - 1] = row.teamName;
           else if (row.stage === "FINAL" && row.slot >= 1 && row.slot <= 2) next.final[row.slot - 1] = row.teamName;
@@ -491,14 +491,18 @@ export default function BracketPage() {
     setResetting(true); setMessage("");
     const res = await fetch(`/api/predictions/${versionNum}/knockout`, { method: "DELETE" });
     setResetting(false);
-    if (res.ok) { setPicks(emptyPicks()); setMessage("✓ הברקט אופסה!"); }
+    if (res.ok) {
+      setPicks(emptyPicks());
+      setStandings([]); // suppress auto-fill until reload — shows truly empty bracket
+      setMessage("✓ הברקט אופסה!");
+    }
     else setMessage("שגיאה באיפוס");
   };
 
   const handleSave = async () => {
     setSaving(true); setMessage("");
     const payload: KnockoutRow[] = [];
-    picks.r32.forEach((t, i) => { if (t) payload.push({ stage: "R32",    slot: i + 1, teamName: t }); });
+    // R32 slots are structural (from standings auto-fill) — not saved
     picks.r16.forEach((t, i) => { if (t) payload.push({ stage: "R16",    slot: i + 1, teamName: t }); });
     picks.qf.forEach((t, i)  => { if (t) payload.push({ stage: "QF",     slot: i + 1, teamName: t }); });
     picks.sf.forEach((t, i)  => { if (t) payload.push({ stage: "SF",     slot: i + 1, teamName: t }); });

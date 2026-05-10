@@ -177,32 +177,51 @@ export default function PredictionVersionPage() {
       knockoutCounts: Record<string, number>;
     };
 
+    const CACHE_KEY = `init_v${versionNum}`;
+    const CACHE_FRESH_MS = 30_000;
+
+    function applyData(data: InitData) {
+      const globalLocked = data.settings["predictions_locked"] === "true";
+      const dl = data.settings[`version_${versionNum}_deadline`] ?? null;
+      const pastDeadline = dl ? new Date() > new Date(dl) : false;
+      setVersionLocked(globalLocked || pastDeadline);
+      setDeadline(dl);
+      setMatches(data.matches);
+      setScoringRules(data.scoringRules);
+      setMaxVersions(data.maxVersions);
+      setKnockoutStageCounts(data.knockoutCounts);
+      const map: Record<string, { home: number; away: number }> = {};
+      const savedSet = new Set<string>();
+      for (const p of data.predictions) {
+        map[p.matchId] = { home: p.homeScore, away: p.awayScore };
+        savedSet.add(p.matchId);
+      }
+      setPredictions(map);
+      setSavedPredictions(savedSet);
+      setReady(true);
+    }
+
+    // Show cached data immediately (eliminates skeleton on repeat visits)
+    let isFresh = false;
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { data, ts } = JSON.parse(raw) as { data: InitData; ts: number };
+        applyData(data);
+        isFresh = Date.now() - ts < CACHE_FRESH_MS;
+      }
+    } catch {}
+
+    if (isFresh) return; // Cache is fresh — skip the network round-trip
+
+    // Fetch fresh data (first visit or background revalidation)
     fetch(`/api/predictions/${versionNum}/init`)
       .then((r) => r.json())
       .then((data: InitData) => {
-        // Settings / lock
-        const globalLocked = data.settings["predictions_locked"] === "true";
-        const dl = data.settings[`version_${versionNum}_deadline`] ?? null;
-        const pastDeadline = dl ? new Date() > new Date(dl) : false;
-        setVersionLocked(globalLocked || pastDeadline);
-        setDeadline(dl);
-
-        // Static data
-        setMatches(data.matches);
-        setScoringRules(data.scoringRules);
-        setMaxVersions(data.maxVersions);
-        setKnockoutStageCounts(data.knockoutCounts);
-
-        // User predictions
-        const map: Record<string, { home: number; away: number }> = {};
-        const savedSet = new Set<string>();
-        for (const p of data.predictions) {
-          map[p.matchId] = { home: p.homeScore, away: p.awayScore };
-          savedSet.add(p.matchId);
-        }
-        setPredictions(map);
-        setSavedPredictions(savedSet);
-        setReady(true);
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+        } catch {}
+        applyData(data);
       })
       .catch(() => setReady(true));
   }, [versionNum]);
@@ -314,6 +333,7 @@ export default function PredictionVersionPage() {
       const newSaved = new Set(savedPredictions);
       for (const p of data.saved) newSaved.add(p.matchId);
       setSavedPredictions(newSaved);
+      try { sessionStorage.removeItem(`init_v${versionNum}`); } catch {}
       setMessage(`נשמרו ${data.saved.length} ניחושים`);
     } else {
       setMessage((data as { error?: string }).error ?? "שגיאה בשמירה");
@@ -336,7 +356,12 @@ export default function PredictionVersionPage() {
     } else if ((KNOCKOUT_STAGE_ORDER as readonly string[]).includes(stage)) {
       requests.push(fetch(`/api/predictions/${versionNum}/knockout?fromStage=${stage}`, { method: "DELETE" }));
     }
-    await Promise.all(requests);
+    const results = await Promise.all(requests);
+    if (results.some((r) => !r.ok)) {
+      setResetting(false);
+      setMessage("שגיאה באיפוס — נסה שנית");
+      return;
+    }
 
     setPredictions((prev) => {
       const next = { ...prev };
@@ -349,6 +374,7 @@ export default function PredictionVersionPage() {
       return next;
     });
     if (stage === "GROUP") lastAutoSyncHash.current = "";
+    try { sessionStorage.removeItem(`init_v${versionNum}`); } catch {}
     setResetting(false);
     // Clear knockoutStageCounts for affected knockout stages
     if (stage === "GROUP") {
@@ -369,15 +395,21 @@ export default function PredictionVersionPage() {
     const total = savedPredictions.size;
     if (!window.confirm(`לאפס את כל הניחושים? (${total} ניחושים, עמדות קבוצות וברקט יימחקו)`)) return;
     setResetting(true);
-    await Promise.all([
+    const resetResults = await Promise.all([
       fetch(`/api/predictions/${versionNum}`, { method: "DELETE" }),
       fetch(`/api/predictions/${versionNum}/standings`, { method: "DELETE" }),
       fetch(`/api/predictions/${versionNum}/knockout`, { method: "DELETE" }),
     ]);
+    if (resetResults.some((r) => !r.ok)) {
+      setResetting(false);
+      setMessage("שגיאה באיפוס — נסה שנית");
+      return;
+    }
     setPredictions({});
     setSavedPredictions(new Set());
     setKnockoutStageCounts({});
     lastAutoSyncHash.current = "";
+    try { sessionStorage.removeItem(`init_v${versionNum}`); } catch {}
     setResetting(false);
     setMessage("כל הניחושים אופסו");
   };

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { PrefetchVersions } from "./PrefetchVersions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -114,6 +115,7 @@ export default async function PredictionsPage() {
           </Link>
         ))}
       </div>
+      <PrefetchVersions versions={versionInfo.map((vi) => vi.v)} />
     </div>
   );
 }

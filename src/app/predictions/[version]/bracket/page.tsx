@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getFlagUrl } from "@/lib/flags";
+import { computeGroupOrdersFromPredictions } from "@/lib/group-standings";
 
 // ─── 2026 WC Official Bracket (FIFA M73-M88 → R32, M89-M96 → R16) ────────────
 
@@ -337,27 +338,80 @@ export default function BracketPage() {
   const [deadline, setDeadline] = useState<string | null>(null);
 
   useEffect(() => {
+    type MatchRow = { id: string; homeTeam: string; awayTeam: string; stage: string; groupName: string | null; };
+    type PredRow = { matchId: string; homeScore: number; awayScore: number };
+    type InitData = {
+      settings: Record<string, string>;
+      matches: MatchRow[];
+      predictions: PredRow[];
+    };
+
+    const CACHE_KEY = `init_v${versionNum}`;
+    const CACHE_FRESH_MS = 30_000;
+
+    let initPromise: Promise<InitData>;
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { data, ts } = JSON.parse(raw) as { data: InitData; ts: number };
+        if (Date.now() - ts < CACHE_FRESH_MS) {
+          initPromise = Promise.resolve(data);
+        } else {
+          initPromise = fetch(`/api/predictions/${versionNum}/init`).then(r => r.json());
+        }
+      } else {
+        initPromise = fetch(`/api/predictions/${versionNum}/init`).then(r => r.json());
+      }
+    } catch {
+      initPromise = fetch(`/api/predictions/${versionNum}/init`).then(r => r.json());
+    }
+
     Promise.all([
-      fetch("/api/admin/settings").then(r => r.json()),
+      initPromise,
       fetch(`/api/predictions/${versionNum}/standings`).then(r => r.json()),
       fetch(`/api/predictions/${versionNum}/knockout`).then(r => r.json()),
-    ]).then(([s, standingsData, knockoutData]: [
-      Record<string, string>,
-      StandingPred[],
-      KnockoutRow[]
-    ]) => {
+    ]).then(([initData, dbStandings, knockoutData]: [InitData, StandingPred[], KnockoutRow[]]) => {
+      const s = initData.settings ?? {};
       const globalLocked = s["predictions_locked"] === "true";
       const dl = s[`version_${versionNum}_deadline`] ?? null;
       const pastDeadline = dl ? new Date() > new Date(dl) : false;
       setLocked(globalLocked || pastDeadline);
       setDeadline(dl);
 
-      if (Array.isArray(standingsData)) setStandings(standingsData);
+      // Compute standings from match predictions — empty if no predictions filled
+      const predMap: Record<string, { home: number; away: number }> = {};
+      if (Array.isArray(initData.predictions)) {
+        for (const p of initData.predictions) {
+          predMap[p.matchId] = { home: p.homeScore, away: p.awayScore };
+        }
+      }
 
+      const computedOrder = Array.isArray(initData.matches)
+        ? computeGroupOrdersFromPredictions(initData.matches, predMap)
+        : {};
+
+      // Merge: computed is base, DB standing is used as manual override
+      // Only include groups that have match predictions
+      const dbMap: Record<string, StandingPred> = {};
+      if (Array.isArray(dbStandings)) {
+        for (const row of dbStandings) dbMap[row.groupName] = row;
+      }
+
+      const merged: StandingPred[] = [];
+      for (const [groupName, teams] of Object.entries(computedOrder)) {
+        if (teams.length < 4) continue;
+        if (dbMap[groupName]) {
+          merged.push(dbMap[groupName]);
+        } else {
+          merged.push({ groupName, rank1: teams[0], rank2: teams[1], rank3: teams[2], rank4: teams[3] });
+        }
+      }
+      setStandings(merged);
+
+      // Load knockout picks
       if (Array.isArray(knockoutData) && knockoutData.length > 0) {
         const next = emptyPicks();
         for (const row of knockoutData) {
-          // R32 slots are always auto-filled from standings — never loaded from DB
           if (row.stage === "R16" && row.slot >= 1 && row.slot <= 16) next.r16[row.slot - 1] = row.teamName;
           else if (row.stage === "QF"  && row.slot >= 1 && row.slot <= 8)  next.qf[row.slot - 1] = row.teamName;
           else if (row.stage === "SF"  && row.slot >= 1 && row.slot <= 4)  next.sf[row.slot - 1] = row.teamName;
@@ -366,7 +420,7 @@ export default function BracketPage() {
         }
         setPicks(next);
       }
-    });
+    }).catch(() => {});
   }, [versionNum]);
 
   // Auto-fill fixed R32 slots (rank1/rank2) from standings when slots are empty

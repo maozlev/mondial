@@ -62,7 +62,17 @@ function InstrRow({ label, value, sub }: { label: string; value: string | number
   );
 }
 
-function InstructionsContent() {
+interface ScoringRule {
+  id: string;
+  eventType: string;
+  nameHe: string;
+  points: number;
+  isActive: boolean;
+  order: number;
+}
+
+function InstructionsContent({ matchRules }: { matchRules: ScoringRule[] }) {
+  const activeRules = matchRules.filter((r) => r.isActive).sort((a, b) => a.order - b.order);
   return (
     <div className="space-y-5 mt-2">
       <InstrSection title="📋 סקירה כללית">
@@ -81,11 +91,18 @@ function InstructionsContent() {
         </p>
       </InstrSection>
       <InstrSection title="🏅 ניקוד — שלב הבתים">
-        <InstrRow label="ניחוש מנצח נכון" value="3 נקודות" sub="ניחשת נכון מי ניצח (לא חייב תוצאה מדויקת)" />
-        <InstrRow label="תוצאה מדויקת" value="5 נקודות" sub="ניחשת את הניקוד המדויק — כולל ה-3 של מנצח נכון" />
-        <InstrRow label="ניחוש תיקו" value="2 נקודות" sub="ניחשת תיקו ויצא תיקו (ללא ציין מדויק)" />
-        <InstrRow label="ניחוש מפסיד נכון" value="1 נקודה" sub="ניחשת נכון מי הפסיד (גם כשהמנצח שגוי)" />
-        <p className="text-gray-500 text-xs pt-1">תוצאה מדויקת = 5 נק׳ + 1 נק׳ למפסיד = <strong className="text-gray-300">6 נקודות סה״כ</strong>.</p>
+        {activeRules.length > 0 ? (
+          activeRules.map((r) => (
+            <InstrRow key={r.id} label={r.nameHe} value={`${r.points} נקודות`} />
+          ))
+        ) : (
+          <>
+            <InstrRow label="ניחוש מנצח נכון" value="3 נקודות" sub="ניחשת נכון מי ניצח (לא חייב תוצאה מדויקת)" />
+            <InstrRow label="תוצאה מדויקת" value="5 נקודות" sub="ניחשת את הניקוד המדויק — כולל ה-3 של מנצח נכון" />
+            <InstrRow label="ניחוש תיקו" value="2 נקודות" sub="ניחשת תיקו ויצא תיקו (ללא ציין מדויק)" />
+            <InstrRow label="ניחוש מפסיד נכון" value="1 נקודה" sub="ניחשת נכון מי הפסיד (גם כשהמנצח שגוי)" />
+          </>
+        )}
       </InstrSection>
       <InstrSection title="📊 עמדות קבוצות">
         <p className="text-gray-300 text-sm leading-relaxed">
@@ -142,6 +159,7 @@ export default function PredictionVersionPage() {
   const [ready, setReady] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [scoringRules, setScoringRules] = useState<ScoringRule[]>([]);
   const lastAutoSyncHash = useRef<string>("");
 
   useEffect(() => {
@@ -160,6 +178,11 @@ export default function PredictionVersionPage() {
     fetch("/api/matches")
       .then((r) => r.json())
       .then(setMatches);
+
+    fetch("/api/admin/scoring-rules")
+      .then((r) => r.json())
+      .then((data: ScoringRule[]) => Array.isArray(data) && setScoringRules(data))
+      .catch(() => {});
 
     fetch(`/api/predictions/${versionNum}`)
       .then((r) => r.json())
@@ -435,7 +458,7 @@ export default function PredictionVersionPage() {
       </div>
 
       {showInstructions ? (
-        <InstructionsContent />
+        <InstructionsContent matchRules={scoringRules} />
       ) : (
         <>
           {/* Stage tabs */}

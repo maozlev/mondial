@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { GenerateCodeButton } from "./GenerateCodeButton";
+import { DeleteUserButton } from "./DeleteUserButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,6 +13,7 @@ export default async function AdminUsersPage() {
   const session = await auth();
   if (!isAdmin(session?.user?.email)) redirect("/");
 
+  const currentUserId = session?.user?.id ?? "";
   const totalMatches = await prisma.match.count();
 
   const users = await prisma.user.findMany({
@@ -72,6 +74,7 @@ export default async function AdminUsersPage() {
               <th className="py-3 px-3 font-medium">גרסה 3</th>
               <th className="py-3 px-3 font-medium">מקסימום</th>
               <th className="py-3 px-3 font-medium">תפקיד</th>
+              <th className="py-3 px-3 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -125,11 +128,18 @@ export default async function AdminUsersPage() {
                     {u.role === "ADMIN" ? "אדמין" : "משתמש"}
                   </span>
                 </td>
+                <td className="py-3 px-3">
+                  <DeleteUserButton
+                    userId={u.id}
+                    userName={u.name ?? u.email ?? ""}
+                    isSelf={u.id === currentUserId}
+                  />
+                </td>
               </tr>
             ))}
             {stats.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-gray-500">
+                <td colSpan={10} className="py-8 text-center text-gray-500">
                   אין משתמשים רשומים עדיין
                 </td>
               </tr>

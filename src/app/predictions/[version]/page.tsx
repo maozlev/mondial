@@ -168,57 +168,43 @@ export default function PredictionVersionPage() {
   const lastAutoSyncHash = useRef<string>("");
 
   useEffect(() => {
-    // Check global settings + version deadline
-    fetch("/api/admin/settings")
+    type InitData = {
+      settings: Record<string, string>;
+      matches: Match[];
+      scoringRules: ScoringRule[];
+      maxVersions: number;
+      predictions: PredictionData[];
+      knockoutCounts: Record<string, number>;
+    };
+
+    fetch(`/api/predictions/${versionNum}/init`)
       .then((r) => r.json())
-      .then((s: Record<string, string>) => {
-        const globalLocked = s["predictions_locked"] === "true";
-        const dl = s[`version_${versionNum}_deadline`] ?? null;
+      .then((data: InitData) => {
+        // Settings / lock
+        const globalLocked = data.settings["predictions_locked"] === "true";
+        const dl = data.settings[`version_${versionNum}_deadline`] ?? null;
         const pastDeadline = dl ? new Date() > new Date(dl) : false;
         setVersionLocked(globalLocked || pastDeadline);
         setDeadline(dl);
-      })
-      .catch(() => {});
 
-    fetch("/api/matches")
-      .then((r) => r.json())
-      .then(setMatches);
+        // Static data
+        setMatches(data.matches);
+        setScoringRules(data.scoringRules);
+        setMaxVersions(data.maxVersions);
+        setKnockoutStageCounts(data.knockoutCounts);
 
-    fetch("/api/admin/scoring-rules")
-      .then((r) => r.json())
-      .then((data: ScoringRule[]) => Array.isArray(data) && setScoringRules(data))
-      .catch(() => {});
-
-    fetch("/api/user/me")
-      .then((r) => r.json())
-      .then((data: { maxVersions?: number }) => typeof data.maxVersions === "number" && setMaxVersions(data.maxVersions))
-      .catch(() => {});
-
-    fetch(`/api/predictions/${versionNum}/knockout`)
-      .then((r) => r.json())
-      .then((data: { stage: string }[]) => {
-        if (!Array.isArray(data)) return;
-        const counts: Record<string, number> = {};
-        for (const pick of data) {
-          counts[pick.stage] = (counts[pick.stage] ?? 0) + 1;
-        }
-        setKnockoutStageCounts(counts);
-      })
-      .catch(() => {});
-
-    fetch(`/api/predictions/${versionNum}`)
-      .then((r) => r.json())
-      .then((data: PredictionData[]) => {
+        // User predictions
         const map: Record<string, { home: number; away: number }> = {};
         const savedSet = new Set<string>();
-        for (const p of data) {
+        for (const p of data.predictions) {
           map[p.matchId] = { home: p.homeScore, away: p.awayScore };
           savedSet.add(p.matchId);
         }
         setPredictions(map);
         setSavedPredictions(savedSet);
         setReady(true);
-      });
+      })
+      .catch(() => setReady(true));
   }, [versionNum]);
 
   const stages = [...new Set(matches.map((m) => m.stage))];
@@ -397,6 +383,31 @@ export default function PredictionVersionPage() {
   };
 
   const deadlinePast = deadline ? new Date() > new Date(deadline) : false;
+
+  if (!ready) {
+    return (
+      <div className="max-w-3xl mx-auto px-3 py-8 sm:px-4 animate-pulse" dir="rtl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 rounded-full bg-gray-700" />
+          <div className="h-7 w-32 bg-gray-700 rounded" />
+        </div>
+        <div className="h-2 bg-gray-800 rounded-full mb-8" />
+        <div className="flex gap-1 mb-6 border-b border-gray-800 pb-0">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-9 w-24 bg-gray-800 rounded-t" />
+          ))}
+        </div>
+        <div className="flex gap-2 mb-6">
+          {[1, 2].map((i) => <div key={i} className="h-8 w-24 bg-gray-800 rounded-lg" />)}
+        </div>
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-16 bg-gray-900 rounded-xl border border-gray-800" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-3 py-8 sm:px-4">

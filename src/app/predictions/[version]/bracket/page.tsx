@@ -331,6 +331,7 @@ export default function BracketPage() {
   const [picks, setPicks] = useState<Picks>(emptyPicks());
   const [standings, setStandings] = useState<StandingPred[]>([]);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [message, setMessage] = useState("");
   const [locked, setLocked] = useState(false);
   const [deadline, setDeadline] = useState<string | null>(null);
@@ -484,6 +485,15 @@ export default function BracketPage() {
       return next;
     });
   }
+
+  const handleResetBracket = async () => {
+    if (!window.confirm("לאפס את כל הברקט? כל הבחירות בנוקאאוט יימחקו.")) return;
+    setResetting(true); setMessage("");
+    const res = await fetch(`/api/predictions/${versionNum}/knockout`, { method: "DELETE" });
+    setResetting(false);
+    if (res.ok) { setPicks(emptyPicks()); setMessage("✓ הברקט אופסה!"); }
+    else setMessage("שגיאה באיפוס");
+  };
 
   const handleSave = async () => {
     setSaving(true); setMessage("");
@@ -662,10 +672,17 @@ export default function BracketPage() {
       </section>
 
       {!locked && (
-        <div className="flex justify-center mt-6">
+        <div className="flex justify-center gap-3 mt-6">
+          <button
+            onClick={handleResetBracket}
+            disabled={resetting || saving}
+            className="bg-gray-700 hover:bg-red-700 disabled:opacity-50 text-white font-bold px-6 py-2 rounded-lg transition-colors"
+          >
+            {resetting ? "מאפס..." : "אפס ברקט"}
+          </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || resetting}
             className="bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-bold px-8 py-2 rounded-lg transition-colors"
           >
             {saving ? "שומר..." : "שמור ברקט"}

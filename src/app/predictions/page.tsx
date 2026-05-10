@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { PrefetchVersions } from "./PrefetchVersions";
+import { SeedInitCache } from "./SeedInitCache";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,30 +11,64 @@ export default async function PredictionsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/api/auth/signin");
 
-  // Get score totals and counts per version
-  const predictions = await prisma.prediction.findMany({
-    where: { userId: session.user.id },
-    include: { scores: true },
-  });
+  // Fetch everything in one parallel round-trip
+  const [matches, scoringRules, settings, currentUser, allPredictions, allKnockouts] =
+    await Promise.all([
+      prisma.match.findMany({ orderBy: { scheduledAt: "asc" } }),
+      prisma.scoringRule.findMany({ where: { isActive: true }, orderBy: { order: "asc" } }),
+      prisma.appSetting.findMany(),
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { maxVersions: true } }),
+      prisma.prediction.findMany({
+        where: { userId: session.user.id },
+        select: {
+          matchId: true,
+          homeScore: true,
+          awayScore: true,
+          version: true,
+          match: { select: { status: true, homeTeam: true, awayTeam: true, stage: true } },
+          scores: { select: { points: true } },
+        },
+      }),
+      prisma.knockoutPrediction.findMany({
+        where: { userId: session.user.id },
+        select: { stage: true, version: true },
+      }),
+    ]);
 
+  const totalMatches = matches.length;
+  const settingsMap = Object.fromEntries(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
+  const globalLocked = settingsMap["predictions_locked"] === "true";
+  const maxVersions = currentUser?.maxVersions ?? 1;
+
+  // Version summary (scores + counts)
   const versionTotals: Record<number, number> = {};
   const versionCounts: Record<number, number> = {};
-
-  for (const pred of predictions) {
+  for (const pred of allPredictions) {
     const pts = pred.scores.reduce((s: number, sc: { points: number }) => s + sc.points, 0);
     versionTotals[pred.version] = (versionTotals[pred.version] ?? 0) + pts;
     versionCounts[pred.version] = (versionCounts[pred.version] ?? 0) + 1;
   }
 
-  const [totalMatches, settings, currentUser] = await Promise.all([
-    prisma.match.count(),
-    prisma.appSetting.findMany(),
-    prisma.user.findUnique({ where: { id: session.user.id }, select: { maxVersions: true } }),
-  ]);
-
-  const settingsMap = Object.fromEntries(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
-  const globalLocked = settingsMap["predictions_locked"] === "true";
-  const maxVersions = currentUser?.maxVersions ?? 1;
+  // Build per-version init data to seed client sessionStorage cache
+  const initDataByVersion: Record<number, unknown> = {};
+  for (let v = 1; v <= maxVersions; v++) {
+    const vPredictions = allPredictions
+      .filter((p) => p.version === v)
+      .map(({ version: _v, scores: _s, ...rest }) => rest);
+    const vKnockouts = allKnockouts.filter((k) => k.version === v);
+    const knockoutCounts: Record<string, number> = {};
+    for (const pick of vKnockouts) {
+      knockoutCounts[pick.stage] = (knockoutCounts[pick.stage] ?? 0) + 1;
+    }
+    initDataByVersion[v] = {
+      settings: settingsMap,
+      matches,
+      scoringRules,
+      maxVersions,
+      predictions: vPredictions,
+      knockoutCounts,
+    };
+  }
 
   const now = new Date();
 
@@ -115,7 +149,7 @@ export default async function PredictionsPage() {
           </Link>
         ))}
       </div>
-      <PrefetchVersions versions={versionInfo.map((vi) => vi.v)} />
+      <SeedInitCache initDataByVersion={initDataByVersion} />
     </div>
   );
 }

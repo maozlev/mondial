@@ -165,7 +165,7 @@ export default function StandingsPage() {
   const [versionLocked, setVersionLocked] = useState(false);
   const [deadline, setDeadline] = useState<string | null>(null);
 
-  // Load settings + existing predictions
+  // Load init data (from sessionStorage cache or API) + saved standings
   useEffect(() => {
     type MatchRow = {
       id: string;
@@ -175,18 +175,41 @@ export default function StandingsPage() {
       groupName: string | null;
     };
     type PredRow = { matchId: string; homeScore: number; awayScore: number };
+    type InitData = {
+      settings: Record<string, string>;
+      matches: MatchRow[];
+      predictions: PredRow[];
+    };
 
-    Promise.all([
-      fetch("/api/admin/settings").then((r) => r.json()),
-      fetch(`/api/predictions/${versionNum}/standings`).then((r) => r.json()),
-      fetch("/api/matches").then((r) => r.json()),
-      fetch(`/api/predictions/${versionNum}`).then((r) => r.json()),
-    ]).then(([s, standingData, matchesData, predsData]: [
-      Record<string, string>,
-      { groupName: string; rank1: string; rank2: string; rank3: string; rank4: string }[],
-      MatchRow[],
-      PredRow[]
+    const CACHE_KEY = `init_v${versionNum}`;
+    const CACHE_FRESH_MS = 30_000;
+
+    // Always fetch saved standings fresh from DB
+    const standingsFetch = fetch(`/api/predictions/${versionNum}/standings`).then((r) => r.json());
+
+    // Use sessionStorage cache for init data if fresh, otherwise fetch
+    let initPromise: Promise<InitData>;
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { data, ts } = JSON.parse(raw) as { data: InitData; ts: number };
+        if (Date.now() - ts < CACHE_FRESH_MS) {
+          initPromise = Promise.resolve(data);
+        } else {
+          initPromise = fetch(`/api/predictions/${versionNum}/init`).then((r) => r.json());
+        }
+      } else {
+        initPromise = fetch(`/api/predictions/${versionNum}/init`).then((r) => r.json());
+      }
+    } catch {
+      initPromise = fetch(`/api/predictions/${versionNum}/init`).then((r) => r.json());
+    }
+
+    Promise.all([initPromise, standingsFetch]).then(([initData, standingData]: [
+      InitData,
+      { groupName: string; rank1: string; rank2: string; rank3: string; rank4: string }[]
     ]) => {
+      const s = initData.settings ?? {};
       const globalLocked = s["predictions_locked"] === "true";
       const dl = s[`version_${versionNum}_deadline`] ?? null;
       const pastDeadline = dl ? new Date() > new Date(dl) : false;
@@ -194,17 +217,17 @@ export default function StandingsPage() {
       setDeadline(dl);
 
       const predMap: Record<string, { home: number; away: number }> = {};
-      if (Array.isArray(predsData)) {
-        for (const p of predsData) {
+      if (Array.isArray(initData.predictions)) {
+        for (const p of initData.predictions) {
           predMap[p.matchId] = { home: p.homeScore, away: p.awayScore };
         }
       }
 
-      const computedOrder = Array.isArray(matchesData)
-        ? computeGroupOrdersFromPredictions(matchesData, predMap)
+      const computedOrder = Array.isArray(initData.matches)
+        ? computeGroupOrdersFromPredictions(initData.matches, predMap)
         : {};
 
-      setGroupOrder((_prev) => {
+      setGroupOrder(() => {
         const next: Record<string, string[]> = {};
 
         // Groups with at least one predicted match — computed from predictions
@@ -214,10 +237,12 @@ export default function StandingsPage() {
           }
         }
 
-        // Groups without predictions but with explicitly saved standings
+        // Saved standings override — ONLY for groups that already have predictions.
+        // Never show DB standings for groups with no predictions (prevents stale
+        // data from appearing after a prediction reset).
         if (Array.isArray(standingData)) {
           for (const row of standingData) {
-            if (!next[row.groupName]) {
+            if (next[row.groupName]) {
               next[row.groupName] = [row.rank1, row.rank2, row.rank3, row.rank4];
             }
           }
@@ -225,7 +250,7 @@ export default function StandingsPage() {
 
         return next;
       });
-    });
+    }).catch(() => {});
 
   }, [versionNum]);
 

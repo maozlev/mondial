@@ -159,11 +159,7 @@ export default function StandingsPage() {
   const { version } = useParams<{ version: string }>();
   const versionNum = parseInt(version, 10);
 
-  const [groupOrder, setGroupOrder] = useState<Record<string, string[]>>(() =>
-    Object.fromEntries(
-      Object.entries(GROUPS).map(([g, teams]) => [g, [...teams]])
-    )
-  );
+  const [groupOrder, setGroupOrder] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [versionLocked, setVersionLocked] = useState(false);
@@ -208,18 +204,20 @@ export default function StandingsPage() {
         ? computeGroupOrdersFromPredictions(matchesData, predMap)
         : {};
 
-      setGroupOrder((prev) => {
-        const next = { ...prev };
+      setGroupOrder((_prev) => {
+        const next: Record<string, string[]> = {};
 
+        // Groups with at least one predicted match — computed from predictions
         for (const [groupName, teams] of Object.entries(computedOrder)) {
           if (teams.length >= 4) {
             next[groupName] = [teams[0], teams[1], teams[2], teams[3]];
           }
         }
 
+        // Groups without predictions but with explicitly saved standings
         if (Array.isArray(standingData)) {
           for (const row of standingData) {
-            if (!computedOrder[row.groupName]) {
+            if (!next[row.groupName]) {
               next[row.groupName] = [row.rank1, row.rank2, row.rank3, row.rank4];
             }
           }
@@ -325,15 +323,25 @@ export default function StandingsPage() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-        {Object.entries(groupOrder).map(([groupName, teams]) => (
-          <GroupCard
-            key={groupName}
-            groupName={groupName}
-            teams={teams}
-            onReorder={handleReorder}
-            locked={versionLocked}
-          />
-        ))}
+        {Object.entries(groupOrder).length === 0 ? (
+          <div className="col-span-full bg-blue-900/30 border border-blue-700 text-blue-300 rounded-xl px-5 py-6 text-sm text-center">
+            💡 מלא קודם ניחושי תוצאות משחקי שלב הבתים —{" "}
+            <Link href={`/predictions/${versionNum}`} className="underline text-blue-200">
+              לחץ כאן
+            </Link>
+            {" "}והעמדות יחושבו אוטומטית.
+          </div>
+        ) : (
+          Object.entries(groupOrder).map(([groupName, teams]) => (
+            <GroupCard
+              key={groupName}
+              groupName={groupName}
+              teams={teams}
+              onReorder={handleReorder}
+              locked={versionLocked}
+            />
+          ))
+        )}
       </div>
 
       {!versionLocked && (
